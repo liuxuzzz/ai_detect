@@ -2,6 +2,7 @@
 
 ## v0.1.0
 
+- 修正云端评测分享站地址为 `https://ai_detect.wv.gs/`。
 - 云端默认前端端口改为 `6600`，API 端口改为 `6601`。
 - 云端首次部署无需手填 `.env`：自动生成并持久保存数据库密码和密钥，默认使用当前服务器 IP 访问 API。
 - 修复 Linux 安装包误带 Android 间接引入的 JNI 库、因缺少 `libjvm.so` 导致 GitHub Actions 打包失败的问题。

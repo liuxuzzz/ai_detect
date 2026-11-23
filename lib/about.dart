@@ -5,7 +5,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 const appName = 'AI质量检测';
 const projectUrl = 'https://github.com/liuxuzzz/ai_detect.git';
-const cloudShareUrl = 'https://ai_detect.wg.gs/';
+const cloudShareUrl = 'https://ai_detect.wv.gs/';
 
 Future<void> openProjectLink(BuildContext context, String url) async {
   try {

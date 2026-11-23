@@ -180,7 +180,7 @@ class _SettingsDialogState extends State<SettingsDialog> {
                 ),
                 const SizedBox(height: 8),
                 const Text(
-                  '需要云端分享时，可在 https://ai_detect.wg.gs/ 注册，并在个人中心创建 API Key（Client Key），填写站点提供的 API 地址；也可自建评测分享站。配置后可上传检测数据并分享报告。本地检测支持离线使用。',
+                  '需要云端分享时，可在 $cloudShareUrl 注册，并在个人中心创建 API Key（Client Key），填写站点提供的 API 地址；也可自建评测分享站。配置后可上传检测数据并分享报告。本地检测支持离线使用。',
                   style: TextStyle(fontSize: 12, color: Colors.grey),
                 ),
                 Align(

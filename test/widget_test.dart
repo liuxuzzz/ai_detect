@@ -223,7 +223,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('全局设置'));
     await tester.pumpAndSettle();
-    expect(find.textContaining('https://ai_detect.wg.gs/'), findsOneWidget);
+    expect(find.textContaining('https://ai_detect.wv.gs/'), findsOneWidget);
     await tester.ensureVisible(find.text('关于'));
     await tester.tap(find.text('关于'));
     await tester.pumpAndSettle();

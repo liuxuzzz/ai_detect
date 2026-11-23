@@ -4,7 +4,7 @@ Flutter desktop harness for measuring the quality of OpenAI-compatible AI relay 
 
 当前版本：**v0.1.0**。项目地址：[ai_detect](https://github.com/liuxuzzz/ai_detect)。全局设置 → 关于中可以查看版本和修改说明。
 
-客户端保留本地 DuckDB，支持离线检测。需要云端分享时，可前往 [评测分享站](https://ai_detect.wg.gs/) 注册，在个人中心创建 API Key（Client Key），再将站点提供的 API 地址和 Key 填入全局设置；也可以用 `cloud/` 自建评测分享站。云端 PostgreSQL 通过 API 接收检测数据。
+客户端保留本地 DuckDB，支持离线检测。需要云端分享时，可前往 [评测分享站](https://ai_detect.wv.gs/) 注册，在个人中心创建 API Key（Client Key），再将站点提供的 API 地址和 Key 填入全局设置；也可以用 `cloud/` 自建评测分享站。云端 PostgreSQL 通过 API 接收检测数据。
 
 安装包构建、GitHub Release 发布和下载方式见 [发布说明](docs/releases.md)，更新记录见 [CHANGELOG.md](CHANGELOG.md)。
 
