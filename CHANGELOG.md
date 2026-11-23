@@ -2,6 +2,7 @@
 
 ## v0.1.0
 
+- 修复 Linux 安装包误带 Android 间接引入的 JNI 库、因缺少 `libjvm.so` 导致 GitHub Actions 打包失败的问题。
 - 云端部署变量集中到带中文注释的 `.env.example`；支持运行时配置 IP 或 HTTPS API 域名。
 - 首个注册账号成为超级管理员；增加 SMTP 邮箱验证、密码找回和按配置启用的 GitHub/Google 登录。
 

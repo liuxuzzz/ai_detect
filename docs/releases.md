@@ -16,7 +16,7 @@
 
 macOS 要求 11.0 及以上。
 
-Linux 构建基于 Ubuntu 22.04，依赖 glibc 2.35 及以上、GTK 3 和桌面图形环境。DEB/RPM 声明系统依赖，由包管理器安装。RPM 平台同样必须满足这个 glibc 版本要求。
+Linux 构建基于 Ubuntu 22.04，依赖 glibc 2.35 及以上、GTK 3 和桌面图形环境，不需要安装 Java/JVM。Android 插件间接引入的 JNI 库不随 Linux 安装包分发。DEB/RPM 声明系统依赖，由包管理器安装。RPM 平台同样必须满足这个 glibc 版本要求。
 
 当前配置不包含 Apple Developer 或 Windows 代码签名证书。macOS 会进行本地 ad-hoc 签名并验证应用包，尚未进行 Apple 公证；下载者可能收到系统安全提示。正式分发若需要已认证开发者身份，应提供自己的签名证书和公证凭证；仓库中不保存证书或私钥。
 

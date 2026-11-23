@@ -74,6 +74,10 @@ set_target_properties(${BINARY_NAME}
 # them to the application.
 include(flutter/generated_plugins.cmake)
 
+# path_provider_android brings in JNI transitively. The Linux implementation
+# uses Dart FFI and needs no JVM, so do not ship the unused Java bridge.
+list(REMOVE_ITEM PLUGIN_BUNDLED_LIBRARIES "$<TARGET_FILE:jni>")
+
 
 # === Installation ===
 # By default, "installing" just makes a relocatable bundle in the build

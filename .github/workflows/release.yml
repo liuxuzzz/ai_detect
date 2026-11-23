@@ -112,9 +112,10 @@ jobs:
       - name: Verify Linux installers
         if: runner.os == 'Linux'
         run: |
+          test ! -e build/linux/x64/release/bundle/lib/libdartjni.so
           dpkg-deb --info release/*.deb
           rpm -qip release/*.rpm
-          xvfb-run -a python3 tool/smoke_desktop.py build/linux/x64/release/bundle/aijiance
+          env -u JAVA_HOME -u JDK_HOME -u LD_LIBRARY_PATH xvfb-run -a python3 tool/smoke_desktop.py build/linux/x64/release/bundle/aijiance
       - name: Verify Windows portable bundle
         if: runner.os == 'Windows'
         run: python tool/smoke_desktop.py build/windows/x64/runner/Release/aijiance.exe
