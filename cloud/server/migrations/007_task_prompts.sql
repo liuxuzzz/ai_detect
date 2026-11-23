@@ -1,0 +1,2 @@
+ALTER TABLE async_tasks ADD COLUMN IF NOT EXISTS prompt_name TEXT;
+ALTER TABLE async_tasks ADD COLUMN IF NOT EXISTS prompt_text TEXT;

@@ -1,0 +1,51 @@
+name: Validate Cloud
+
+on:
+  push:
+    paths: ['cloud/**', '.github/workflows/cloud.yml']
+  pull_request:
+    paths: ['cloud/**', '.github/workflows/cloud.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  api:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: aijiance
+          POSTGRES_PASSWORD: isolated-ci-password
+          POSTGRES_DB: aijiance_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U aijiance -d aijiance_test"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - run: rustup toolchain install 1.88.0 --profile minimal
+      - name: Rust tests and PostgreSQL HTTP integration
+        working-directory: cloud/server
+        env:
+          TEST_DATABASE_URL: postgres://aijiance:isolated-ci-password@localhost:5432/aijiance_test
+        run: cargo +1.88.0 test --locked -- --include-ignored --test-threads=1
+  web:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: cloud/web/package-lock.json
+      - name: Vue tests and production build
+        working-directory: cloud/web
+        run: |
+          npm ci
+          npm test
+          npm run build
