@@ -1,6 +1,6 @@
 use anyhow::Context;
 use serde::Deserialize;
-use std::{env, net::SocketAddr};
+use std::{env, fs, net::SocketAddr};
 
 pub struct Settings {
     pub database_url: String,
@@ -17,17 +17,16 @@ impl Settings {
     pub fn from_environment() -> anyhow::Result<Self> {
         let defaults = FileSettings::load(&optional("APP_ENV", "local"))?;
         Ok(Self {
-            database_url: required("DATABASE_URL")?,
+            database_url: database_url(&environment)?,
             database_pool_size: env::var("DATABASE_POOL_SIZE")
                 .ok()
                 .map(|value| value.parse::<usize>())
                 .transpose()
                 .context("DATABASE_POOL_SIZE 无效")?
                 .unwrap_or(defaults.database_pool_size),
-            jwt_secret: optional("JWT_SECRET", "change-me"),
-            client_key_encryption_secret: env::var("CLIENT_KEY_ENCRYPTION_SECRET")
-                .ok()
-                .filter(|secret| !secret.is_empty()),
+            jwt_secret: secret("JWT_SECRET", &environment)?
+                .context("缺少 JWT_SECRET 或 JWT_SECRET_FILE")?,
+            client_key_encryption_secret: secret("CLIENT_KEY_ENCRYPTION_SECRET", &environment)?,
             api_public_url: public_url(
                 "WEB_API_BASE_URL",
                 &optional(
@@ -68,8 +67,60 @@ impl FileSettings {
     }
 }
 
-fn required(name: &str) -> anyhow::Result<String> {
-    env::var(name).map_err(|_| anyhow::anyhow!("缺少环境变量 {name}"))
+fn environment(name: &str) -> Option<String> {
+    env::var(name).ok().filter(|value| !value.is_empty())
+}
+
+fn secret(name: &str, get: &impl Fn(&str) -> Option<String>) -> anyhow::Result<Option<String>> {
+    if let Some(value) = get(name) {
+        return Ok(Some(value));
+    }
+    let Some(path) = get(&format!("{name}_FILE")) else {
+        return Ok(None);
+    };
+    let value = fs::read_to_string(path).with_context(|| format!("无法读取 {name}_FILE"))?;
+    let value = value.trim_end_matches(['\r', '\n']).to_owned();
+    anyhow::ensure!(!value.is_empty(), "{name}_FILE 不能为空");
+    Ok(Some(value))
+}
+
+fn database_url(get: &impl Fn(&str) -> Option<String>) -> anyhow::Result<String> {
+    if let Some(url) = get("DATABASE_URL") {
+        return Ok(url);
+    }
+    let password =
+        secret("POSTGRES_PASSWORD", get)?.context("缺少 DATABASE_URL 或 POSTGRES_PASSWORD_FILE")?;
+    let parameters = [
+        (
+            "host",
+            get("POSTGRES_HOST").unwrap_or_else(|| "postgres".into()),
+        ),
+        (
+            "port",
+            get("POSTGRES_PORT").unwrap_or_else(|| "5432".into()),
+        ),
+        (
+            "user",
+            get("POSTGRES_USER").unwrap_or_else(|| "aijiance".into()),
+        ),
+        (
+            "dbname",
+            get("POSTGRES_DB").unwrap_or_else(|| "aijiance".into()),
+        ),
+        ("password", password),
+    ];
+    // libpq's quoted format preserves passwords containing URL delimiters,
+    // spaces, quotes or backslashes without changing their meaning.
+    Ok(parameters
+        .into_iter()
+        .map(|(key, value)| {
+            format!(
+                "{key}='{}'",
+                value.replace('\\', "\\\\").replace('\'', "\\'")
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(" "))
 }
 
 fn public_url(name: &str, value: &str) -> anyhow::Result<String> {
@@ -88,22 +139,7 @@ fn public_url(name: &str, value: &str) -> anyhow::Result<String> {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::public_url;
-    #[test]
-    fn public_addresses_preserve_domains_without_container_ports() {
-        assert_eq!(
-            public_url("api", "https://api.example.com/").unwrap(),
-            "https://api.example.com"
-        );
-        assert_eq!(
-            public_url("api", "http://127.0.0.1:8081").unwrap(),
-            "http://127.0.0.1:8081"
-        );
-        assert!(public_url("api", "javascript:alert(1)").is_err());
-        assert!(public_url("api", "https://user:password@api.example.com").is_err());
-    }
-}
+mod tests;
 
 fn optional(name: &str, default: &str) -> String {
     env::var(name).unwrap_or_else(|_| default.to_owned())

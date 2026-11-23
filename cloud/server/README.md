@@ -103,7 +103,9 @@ The server starts a Tokio Task alongside Axum. It claims due jobs in PostgreSQL 
 
 ## Production Deployment
 
-Run `docker compose` from the `cloud/` directory after copying `.env.example` to `.env`. The Compose project name is `aijiance-cloud`, preserving container and volume names independently of the checkout directory. The default local frontend/API addresses are `http://127.0.0.1:8080` and `http://127.0.0.1:8081`; configure your server IP or custom API domain in `.env`.
+Run `docker compose up -d --build` from `cloud/`; no `.env` is required. A one-shot initialization service generates independent random database, JWT and encryption secrets in the persistent `runtime_secrets` volume. PostgreSQL and Axum read their secret files from a read-only mount. Existing `.env` values take precedence; importing an older installation preserves its JWT-based encryption fallback. An existing database without its original password stops initialization instead of resetting data. Back up the secrets volume alongside PostgreSQL and any custom `.env`.
+
+The Compose project name is `aijiance-cloud`, preserving container and volume names independently of the checkout directory. Open `http://SERVER_IP:8080`; the browser derives the API host from the current page and uses port `8081`. Copy `.env.example` to `.env` only when overriding ports, configuring an external database or assigning a custom public API domain.
 
 The web service publishes port `8080` and serves static files only. The Axum backend publishes port `8081` (container port `8080`). Browsers and desktop clients call the backend directly; Nginx does not proxy APIs or SSE; report pages are Vue routes. PostgreSQL stores reports and Redis provides caching. There is no object-storage service.
 

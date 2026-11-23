@@ -1,15 +1,31 @@
 name: aijiance-cloud
 
 services:
+  init-secrets:
+    image: postgres:16-alpine
+    restart: "no"
+    entrypoint: ["/bin/sh", "/init-secrets.sh"]
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-}
+      JWT_SECRET: ${JWT_SECRET:-}
+      CLIENT_KEY_ENCRYPTION_SECRET: ${CLIENT_KEY_ENCRYPTION_SECRET:-}
+    volumes:
+      - ./docker/init-secrets.sh:/init-secrets.sh:ro
+      - runtime_secrets:/run/secrets
+      - postgres_data:/existing-postgres:ro
   postgres:
     image: postgres:16-alpine
     restart: unless-stopped
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-aijiance}
       POSTGRES_USER: ${POSTGRES_USER:-aijiance}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?请在 .env 配置 POSTGRES_PASSWORD}
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - runtime_secrets:/run/secrets:ro
+    depends_on:
+      init-secrets:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
       interval: 2s
@@ -27,17 +43,27 @@ services:
     ports:
       - "${SERVER_BIND_ADDRESS:-0.0.0.0}:${SERVER_PORT:-8081}:8080"
     environment:
-      DATABASE_URL: ${DATABASE_URL:-postgres://${POSTGRES_USER:-aijiance}:${POSTGRES_PASSWORD:?请在 .env 配置 POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-aijiance}}
+      DATABASE_URL: ${DATABASE_URL:-}
+      POSTGRES_HOST: postgres
+      POSTGRES_DB: ${POSTGRES_DB:-aijiance}
+      POSTGRES_USER: ${POSTGRES_USER:-aijiance}
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
       DATABASE_POOL_SIZE: ${DATABASE_POOL_SIZE:-8}
-      JWT_SECRET: ${JWT_SECRET:?请在 .env 配置 JWT_SECRET}
+      JWT_SECRET: ${JWT_SECRET:-}
+      JWT_SECRET_FILE: /run/secrets/jwt_secret
       CLIENT_KEY_ENCRYPTION_SECRET: ${CLIENT_KEY_ENCRYPTION_SECRET:-}
+      CLIENT_KEY_ENCRYPTION_SECRET_FILE: /run/secrets/client_key_encryption_secret
       API_PUBLIC_BASE_URL: ${WEB_API_BASE_URL:-http://127.0.0.1:8081}
       APP_ENV: prod
       BIND_ADDRESS: 0.0.0.0:8080
       RUST_LOG: ${RUST_LOG:-info}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379}
       TASK_DAILY_LIMIT: ${TASK_DAILY_LIMIT:-20}
+    volumes:
+      - runtime_secrets:/run/secrets:ro
     depends_on:
+      init-secrets:
+        condition: service_completed_successfully
       postgres:
         condition: service_healthy
       redis:
@@ -53,3 +79,4 @@ services:
 volumes:
   postgres_data:
   redis_data:
+  runtime_secrets:

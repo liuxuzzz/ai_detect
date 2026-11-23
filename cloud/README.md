@@ -6,12 +6,16 @@ Vue 前端与 Axum API 独立部署，PostgreSQL 保存账号和报告，Redis �
 
 ```sh
 cd cloud
-cp .env.example .env
-# 编辑 .env：设置地址、数据库密码、签名密钥和加密密钥
 docker compose up -d --build
 ```
 
-所有部署环境变量统一列在 [`.env.example`](.env.example)，包含中文说明。推荐用 `openssl rand -hex 32` 生成独立的签名/加密密钥，用 `openssl rand -hex 24` 生成数据库密码。不要提交 `.env`。升级已有站点时保留原有数据库密码和密钥。
+无需创建 `.env` 或手填密码、密钥。启动时自动生成独立的随机数据库密码、签名密钥和加密密钥，保存在 `runtime_secrets` Docker 数据卷中，重启、重建容器时复用。数据库不映射公网端口。
+
+启动完成后打开 `http://服务器IP:8080`；本机部署打开 `http://127.0.0.1:8080`。浏览器自动连接同一台服务器的 `8081` API 端口，服务器放行这两个端口即可。
+
+需要自定义端口、API 域名或外部数据库时，再执行 `cp .env.example .env` 并修改对应项目。所有可选变量统一列在 [`.env.example`](.env.example)，包含中文说明；留空的密钥仍会自动生成。不要提交 `.env`。
+
+**升级已有站点时保留原 `.env`。** 其中已有的密码和密钥优先生效；旧版未单独设置加密密钥时，会保留原 JWT 密钥用于解密已有数据。如果检测到已有数据库但缺少原密码或签名密钥，且没有对应的持久化密钥文件，启动会停止并提示恢复原配置，不会重置数据库。备份时同时保留 PostgreSQL、Redis、`runtime_secrets` 数据卷和自定义 `.env`；`docker compose down` 保留数据，`down -v` 会删除它们。
 
 首次打开网站后注册自己的账号。**新数据库的第一个成功注册账号自动成为超级管理员**；并发注册也只会选出一个。程序不再读取预置管理员邮箱/密码，不创建默认账号。超级管理员不能被后台禁用或取消权限。升级已有数据库会保留原有账号和密码，将最早的有效管理员标记为超级管理员。
 
@@ -21,11 +25,11 @@ docker compose up -d --build
 
 | 场景 | 前端实际访问地址（自动记录） | `.env` 的 `WEB_API_BASE_URL` |
 | --- | --- | --- |
-| 本机开发 | `http://127.0.0.1:8080` | `http://127.0.0.1:8081` |
-| IP 直连 | `http://服务器IP:8080` | `http://服务器IP:8081` |
+| 本机开发 | `http://127.0.0.1:8080` | 留空，自动使用当前主机 |
+| IP 直连 | `http://服务器IP:8080` | 留空，自动使用当前服务器 IP |
 | Cloudflare/反向代理 | `https://ai.example.com` | `https://api.example.com` |
 
-API 公网地址由 `.env` 指定，HTTPS 域名不会被自动补上 Docker 端口。`WEB_PORT`、`SERVER_PORT` 只配置宿主机端口，与公网 URL 无关。分别把前端域名和 API 域名路由到对应服务即可；同机代理或 Cloudflare Tunnel 可将两个 `*_BIND_ADDRESS` 设为 `127.0.0.1`。
+IP 直连无需配置 API 地址。使用 Cloudflare/反向代理或启用第三方登录时，在 `.env` 中指定 API 公网地址；HTTPS 域名不会被自动补上 Docker 端口。`WEB_PORT`、`SERVER_PORT` 配置宿主机端口。分别把前端域名和 API 域名路由到对应服务即可；同机代理或 Cloudflare Tunnel 可将两个 `*_BIND_ADDRESS` 设为 `127.0.0.1`。
 
 修改 API 地址后执行 `docker compose up -d --force-recreate server web`。Web 在容器启动时生成 `app-config.js`，无需重新构建镜像。SMTP 和 OAuth 应用密钥不会写入此文件。HTTPS 页面须配 HTTPS API；客户端「云端 API 地址」填写 `WEB_API_BASE_URL`，不是前端地址。旧的 `PUBLIC_BASE_URL` 环境变量不再使用。
 
