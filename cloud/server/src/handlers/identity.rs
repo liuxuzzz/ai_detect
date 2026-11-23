@@ -25,9 +25,9 @@ pub(crate) async fn settings(
     _admin: Administrator,
 ) -> ServiceResult<impl IntoResponse> {
     let config = identity_settings::load(&state).await?;
-    Ok(no_store(identity_settings::public_admin_view(
-        &state, &config,
-    )))
+    Ok(no_store(
+        identity_settings::public_admin_view(&state, &config).await?,
+    ))
 }
 
 pub(crate) async fn update_settings(

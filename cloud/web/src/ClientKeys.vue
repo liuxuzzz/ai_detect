@@ -95,7 +95,7 @@ onMounted(() => run(refresh))
         </button>
       </div>
     </div>
-    <p class="muted">在客户端「全局设置」中，将云端 API 地址填写为 <code>{{ apiUrl('') }}</code>，再填入创建的 Client Key，即可上传检测报告。</p>
+    <p class="muted">在客户端「全局设置」中，将云端地址填写为 <code>{{ apiUrl('') }}</code>（与浏览器地址相同），再填入创建的 Client Key，即可上传检测报告。</p>
 
     <div v-loading="busy" class="table-frame" :aria-busy="busy">
       <table v-if="keys?.length" class="data-table work-table" aria-label="我的 Client Key">

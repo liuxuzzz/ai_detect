@@ -2,6 +2,7 @@ name: Validate Cloud
 
 on:
   push:
+    branches: [main]
     paths: ['cloud/**', '.github/workflows/cloud.yml']
   pull_request:
     paths: ['cloud/**', '.github/workflows/cloud.yml']
@@ -20,10 +21,9 @@ jobs:
         run: python3 cloud/tests/secret_initialization_test.py
       - name: Build deployable images
         run: |
-          docker build -t aijiance-first-start-server:ci cloud/server
-          docker build -t aijiance-first-start-web:ci cloud/web
+          docker build -t aijiance-cloud:ci cloud
       - name: First deployment without configuration and persistent restarts
-        run: python3 cloud/tests/compose_smoke.py --server-image aijiance-first-start-server:ci --web-image aijiance-first-start-web:ci
+        run: python3 cloud/tests/compose_smoke.py --image aijiance-cloud:ci
   api:
     runs-on: ubuntu-22.04
     timeout-minutes: 25

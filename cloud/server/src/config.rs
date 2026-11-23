@@ -7,7 +7,6 @@ pub struct Settings {
     pub database_pool_size: usize,
     pub jwt_secret: String,
     pub client_key_encryption_secret: Option<String>,
-    pub api_public_url: String,
     pub bind_address: SocketAddr,
     pub redis_url: String,
     pub task_daily_limit: i64,
@@ -27,13 +26,6 @@ impl Settings {
             jwt_secret: secret("JWT_SECRET", &environment)?
                 .context("缺少 JWT_SECRET 或 JWT_SECRET_FILE")?,
             client_key_encryption_secret: secret("CLIENT_KEY_ENCRYPTION_SECRET", &environment)?,
-            api_public_url: public_url(
-                "WEB_API_BASE_URL",
-                &optional(
-                    "API_PUBLIC_BASE_URL",
-                    &optional("WEB_API_BASE_URL", "http://127.0.0.1:6601"),
-                ),
-            )?,
             bind_address: optional("BIND_ADDRESS", &defaults.bind_address)
                 .parse()
                 .context("BIND_ADDRESS 无效")?,
@@ -121,21 +113,6 @@ fn database_url(get: &impl Fn(&str) -> Option<String>) -> anyhow::Result<String>
         })
         .collect::<Vec<_>>()
         .join(" "))
-}
-
-fn public_url(name: &str, value: &str) -> anyhow::Result<String> {
-    let url = reqwest::Url::parse(value.trim())
-        .with_context(|| format!("{name} 必须是完整的 http/https 公网地址"))?;
-    anyhow::ensure!(
-        ["http", "https"].contains(&url.scheme())
-            && url.host_str().is_some()
-            && url.username().is_empty()
-            && url.password().is_none()
-            && url.query().is_none()
-            && url.fragment().is_none(),
-        "{name} 必须是无账号密码、无查询参数的 http/https 地址"
-    );
-    Ok(url.to_string().trim_end_matches('/').to_owned())
 }
 
 #[cfg(test)]

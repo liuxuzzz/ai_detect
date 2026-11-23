@@ -11,7 +11,6 @@ pub struct AppState {
     db: Pool,
     pub(crate) jwt_secret: String,
     pub(crate) client_key_cipher: std::sync::Arc<services::key_cipher::KeyCipher>,
-    pub(crate) api_public_url: String,
     pub(crate) task_limit: i64,
     pub(crate) cache: Option<redis::Client>,
 }
@@ -41,7 +40,6 @@ impl AppState {
                     .as_deref()
                     .unwrap_or(&settings.jwt_secret),
             )?),
-            api_public_url: settings.api_public_url.trim_end_matches('/').to_owned(),
             task_limit: settings.task_daily_limit,
             cache: redis::Client::open(settings.redis_url.as_str()).ok(),
         })

@@ -211,8 +211,8 @@ void main() {
     PackageInfo.setMockInitialValues(
       appName: 'AI质量检测',
       packageName: 'com.example.aijiance',
-      version: '0.1.0',
-      buildNumber: '1',
+      version: '0.1.1',
+      buildNumber: '2',
       buildSignature: '',
     );
     await tester.binding.setSurfaceSize(const Size(1440, 1100));
@@ -228,7 +228,7 @@ void main() {
     await tester.tap(find.text('关于'));
     await tester.pumpAndSettle();
     expect(find.text('关于 AI质量检测'), findsOneWidget);
-    expect(find.text('版本 v0.1.0'), findsOneWidget);
+    expect(find.text('版本 v0.1.1'), findsOneWidget);
     expect(
       find.text('https://github.com/liuxuzzz/ai_detect.git'),
       findsOneWidget,

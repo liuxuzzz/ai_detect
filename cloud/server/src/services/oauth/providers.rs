@@ -53,7 +53,7 @@ pub(super) async fn exchange(
     let client = reqwest::Client::builder()
         .timeout(Duration::from_secs(20))
         .redirect(reqwest::redirect::Policy::none())
-        .user_agent("ai-detect/0.1.0")
+        .user_agent(concat!("ai-detect/", env!("CARGO_PKG_VERSION")))
         .build()
         .map_err(|_| invalid())?;
     let endpoint = match name {

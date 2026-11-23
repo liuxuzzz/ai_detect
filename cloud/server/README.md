@@ -43,7 +43,7 @@ PostgreSQL stores scalar measurements in `reports.metadata` and complete version
 
 Migration 010 makes the old HTML column optional. Startup recovers available scalar measurements, samples and model output from legacy reports into structured content, only where `data IS NULL`. Existing HTML is retained solely for rollback; no API serves it. Older documents cannot recover prompt or activity records they never saved. The desktop's standalone HTML export remains a local feature, with its assets under the root `assets/` directory.
 
-The Vue frontend owns `/r/{slug}` and `/share/{token}`. Axum has no HTML or static-asset routes. Share expiry is checked by the API; iframe display preferences are checked by the Vue page and do not replace access control.
+Axum serves the Vue shell at `/r/{slug}`, `/share/{token}` and `/auth/callback`, and static assets from the packaged `static/` directory. Unknown `/api` routes always return JSON errors rather than the Vue shell. Share expiry is checked by the API; iframe display preferences are checked by the Vue page and do not replace access control.
 
 ## Public Rankings
 
@@ -67,7 +67,7 @@ Administrators can enable or disable new account registration under Management C
 
 `POST /api/auth/email-code` accepts `{ "email": "...", "purpose": "register" | "reset" }`. Codes are HMAC protected, valid for 15 minutes, single-use and limited to five guesses. Requests use a per-email cooldown and hourly limit. Registration accepts `email_code` when SMTP is enabled, except during first-account setup. `POST /api/auth/password/reset` accepts `email`, `code`, and `new_password` and invalidates older sessions. Reset requests do not reveal whether an account exists.
 
-`GET /api/auth/oauth/{github|google}/start` redirects to a configured provider with browser-bound state and PKCE. The corresponding `/callback` consumes the state once and redirects to the Vue `/auth/callback` page with a 60-second single-use ticket in the fragment. `POST /api/auth/oauth/exchange` swaps that ticket for a session. The API never serves an HTML page. Provider identity IDs are stable; automatic linking to a local account requires that local email to have been verified. Disabled users and newly registered users when registration is closed are rejected.
+`GET /api/auth/oauth/{github|google}/start` redirects to a configured provider with browser-bound state and PKCE. The corresponding `/callback` consumes the state once and redirects to the Vue `/auth/callback` page with a 60-second single-use ticket in the fragment. `POST /api/auth/oauth/exchange` swaps that ticket for a session. JSON endpoints remain under `/api`; the same Axum application serves the Vue page shell and static assets. Provider identity IDs are stable; automatic linking to a local account requires that local email to have been verified. Disabled users and newly registered users when registration is closed are rejected.
 
 ## Upload Limits
 
@@ -103,21 +103,17 @@ The server starts a Tokio Task alongside Axum. It claims due jobs in PostgreSQL 
 
 ## Production Deployment
 
-Run `docker compose up -d --build` from `cloud/`; no `.env` is required. A one-shot initialization service generates independent random database, JWT and encryption secrets in the persistent `runtime_secrets` volume. PostgreSQL and Axum read their secret files from a read-only mount. Existing `.env` values take precedence; importing an older installation preserves its JWT-based encryption fallback. An existing database without its original password stops initialization instead of resetting data. Back up the secrets volume alongside PostgreSQL and any custom `.env`.
+Run `docker compose up -d --build` from `cloud/`; no `.env` is required. `cloud/Dockerfile` builds Vue and Axum into one application image, served on port `6600`. PostgreSQL, Redis and persisted credentials retain their existing Compose volumes. The one-shot initializer generates missing independent random secrets and imports existing environment credentials.
 
-The Compose project name is `aijiance-cloud`, preserving container and volume names independently of the checkout directory. Open `http://SERVER_IP:6600`; the browser derives the API host from the current page and uses port `6601`. Copy `.env.example` to `.env` only when overriding ports, configuring an external database or assigning a custom public API domain.
+Browsers and desktop clients use the same site address, whether an IP and port or an HTTPS domain. JSON requests and SSE use relative `/api` paths. Axum serves the packaged frontend directly; there is no Nginx service or separate public API port. A reverse proxy or Cloudflare Tunnel routes a single domain to the application port. No API address environment variable is needed.
 
-The web service publishes port `6600` and serves static files only. The Axum backend publishes port `6601` (container port `6601`). Browsers and desktop clients call the backend directly; Nginx does not proxy APIs or SSE; report pages are Vue routes. PostgreSQL stores reports and Redis provides caching. There is no object-storage service.
+The first administrator browser login records the site's address in PostgreSQL. Report links and OAuth callback URLs use that address; administrators can update it in Site Settings. OAuth credentials and SMTP remain database settings.
 
-The frontend URL is learned from the first authenticated administrator browser session and persisted in site settings. Administrators can update it under Management Center → Site Settings → Site Address; the server does not read `PUBLIC_BASE_URL`. Before a site URL has been saved, report APIs return relative page paths. The desktop client's Cloud API address must use the backend port. The client preserves the configured API host, port and path; it does not rewrite addresses for any particular deployment. Existing frontend report/share links now load Vue and fetch JSON from the backend.
-
-`SERVER_PORT` and `WEB_PORT` configure host port publishing. Set the public API URL with `WEB_API_BASE_URL`, e.g. `https://api.example.com`. The frontend site address is managed through the web UI. The backend receives this API address as `API_PUBLIC_BASE_URL` for OAuth callbacks. The web container generates an uncached `app-config.js` at startup, so changing `.env` requires container recreation, not an image rebuild. An explicit HTTPS API URL never acquires a Docker port. Vite development reads the same `cloud/.env` API address. Nginx serves static files only.
-
-Keep release staging under `.deploy/releases/`, database backups under `.deploy/backups/`, and one previous known-good release under `.deploy/rollback/previous/`. Remove obsolete staging after verification. Do not create temporary release directories directly under `/root` or clean up other projects' resources.
+For upgrades from separate web/server containers, preserve `.env` and the data volumes and run `docker compose up -d --build --remove-orphans`. This removes old service containers while reusing PostgreSQL, Redis and `runtime_secrets`. `WEB_PORT` still controls the published port. Back up the database and secrets volume together; keep existing JWT and encryption keys stable.
 
 ## Local Development
 
-Deployment configuration is centralized in `cloud/.env.example` with Chinese comments; see `cloud/README.md`. For native development copy that example to `cloud/.env`, set local `DATABASE_URL`, `JWT_SECRET`, and the public API URL, then start from `cloud` with `cargo run --manifest-path server/Cargo.toml`. The first registered account becomes super administrator. Run the check commands below from `cloud/server`. `config/default.toml` supplies defaults, `APP_ENV=prod` merges `config/prod.toml`, and environment variables take precedence. The TOML files are embedded at compile time. Report URLs use the site address saved in PostgreSQL; fresh installations learn it from an administrator browser login.
+Deployment configuration is centralized in `cloud/.env.example` with Chinese comments; see `cloud/README.md`. For native development copy that example to `cloud/.env`, set local `DATABASE_URL` and `JWT_SECRET`, then start from `cloud` with `cargo run --manifest-path server/Cargo.toml`. For frontend development run Vite from `cloud/web`; it proxies `/api` to local port `6600`. The first registered account becomes super administrator. Run the check commands below from `cloud/server`. `config/default.toml` supplies defaults, `APP_ENV=prod` merges `config/prod.toml`, and environment variables take precedence. The TOML files are embedded at compile time. Report URLs use the site address saved in PostgreSQL; fresh installations learn it from an administrator browser login.
 
 ```sh
 cargo run --locked

@@ -7,8 +7,7 @@ from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
 
-api = os.environ.get('CLOUD_URL', 'http://127.0.0.1:18091').rstrip('/')
-web = os.environ.get('WEB_URL', 'http://127.0.0.1:18090').rstrip('/')
+api = web = os.environ.get('CLOUD_URL', 'http://127.0.0.1:16600').rstrip('/')
 postgres = os.environ['FIXTURE_POSTGRES']
 
 
@@ -76,7 +75,7 @@ stored = subprocess.check_output([
     '-v', 'ON_ERROR_STOP=1', '-c', f"SELECT html IS NULL AND data->>'version'='1' FROM reports WHERE id={int(report['id'])}",
 ], text=True).strip()
 assert stored == 't'
-for path in ('/r/' + report['slug'], '/share/' + share['token'], '/static/report_chart.js'):
+for path in ('/api/not-a-route', '/api/reports/not/a/route'):
     assert json_request(path, expected=404)['error']
 for url in (report['owner_url'], share['url']):
     with urlopen(url, timeout=15) as response:
@@ -99,17 +98,5 @@ stream, headers = request(f'/api/tasks/{int(task_id)}/events', headers={
 assert headers['Content-Type'].startswith('text/event-stream')
 assert 'event: snapshot' in stream and 'direct-sse-fixture' in stream
 
-with urlopen(web, timeout=15) as response:
-    html = response.read().decode()
-bundle = re.search(r'src="([^"]+\.js)"', html).group(1)
-with urlopen(web + bundle, timeout=15) as response:
-    assert '6601' in response.read().decode()
-for path in ('/api/public/rankings', '/health'):
-    try:
-        urlopen(web + path, timeout=15)
-    except HTTPError as error:
-        assert error.code == 404
-    else:
-        raise AssertionError('Static web service unexpectedly handled a backend request')
-
-print('PASS: JSON API, structured-only PostgreSQL storage, cross-origin auth/upload, Vue report/share pages, editable rating, SSE and static-only web')
+assert json_request('/health') == {'status': 'ok'}
+print('PASS: same-origin pages, JSON API, PostgreSQL storage, authentication, upload, report/share pages, editable rating and SSE')

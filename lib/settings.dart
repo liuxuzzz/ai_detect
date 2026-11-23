@@ -160,9 +160,9 @@ class _SettingsDialogState extends State<SettingsDialog> {
                   controller: cloudUrl,
                   enabled: !busy,
                   decoration: const InputDecoration(
-                    labelText: '云端 API 地址',
-                    hintText: 'http://127.0.0.1:6601',
-                    helperText: '填写自己的服务器 IP:端口，或自定义 HTTPS API 域名',
+                    labelText: '云端地址',
+                    hintText: 'http://127.0.0.1:6600',
+                    helperText: '填写浏览器中打开的站点地址，支持 IP:端口或 HTTPS 域名',
                   ),
                   keyboardType: TextInputType.url,
                 ),
@@ -180,7 +180,7 @@ class _SettingsDialogState extends State<SettingsDialog> {
                 ),
                 const SizedBox(height: 8),
                 const Text(
-                  '需要云端分享时，可在 $cloudShareUrl 注册，并在个人中心创建 API Key（Client Key），填写站点提供的 API 地址；也可自建评测分享站。配置后可上传检测数据并分享报告。本地检测支持离线使用。',
+                  '需要云端分享时，可在 $cloudShareUrl 注册，并在个人中心创建 API Key（Client Key），填写浏览器中打开的站点地址；也可自建评测分享站。配置后可上传检测数据并分享报告。本地检测支持离线使用。',
                   style: TextStyle(fontSize: 12, color: Colors.grey),
                 ),
                 Align(

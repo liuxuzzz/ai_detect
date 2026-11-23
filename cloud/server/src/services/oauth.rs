@@ -29,6 +29,7 @@ pub(crate) async fn start(state: &AppState, name: &str) -> ServiceResult<Authori
     if site_settings::get(state).await?.site_url.is_empty() {
         return Err(err(ErrorKind::InvalidInput, "请先在管理中心保存站点地址"));
     }
+    let redirect_uri = identity_settings::callback_url(state, name).await?;
     let token = auth::random_token(48);
     let browser = auth::random_token(48);
     let verifier = auth::random_token(64);
@@ -54,10 +55,7 @@ pub(crate) async fn start(state: &AppState, name: &str) -> ServiceResult<Authori
     .map_err(AppError::internal)?;
     url.query_pairs_mut().extend_pairs([
         ("client_id", provider.client_id.as_str()),
-        (
-            "redirect_uri",
-            identity_settings::callback_url(state, name).as_str(),
-        ),
+        ("redirect_uri", redirect_uri.as_str()),
         ("response_type", "code"),
         (
             "scope",
@@ -71,7 +69,7 @@ pub(crate) async fn start(state: &AppState, name: &str) -> ServiceResult<Authori
         ("code_challenge", challenge.as_str()),
         ("code_challenge_method", "S256"),
     ]);
-    let secure = if state.api_public_url.starts_with("https://") {
+    let secure = if redirect_uri.starts_with("https://") {
         "; Secure"
     } else {
         ""
@@ -138,14 +136,8 @@ pub(crate) async fn callback(
         .client_key_cipher
         .decrypt(-2, row.get(0))
         .map_err(AppError::internal)?;
-    let identity = providers::exchange(
-        name,
-        provider,
-        &identity_settings::callback_url(state, name),
-        &code,
-        &verifier,
-    )
-    .await?;
+    let redirect_uri = identity_settings::callback_url(state, name).await?;
+    let identity = providers::exchange(name, provider, &redirect_uri, &code, &verifier).await?;
     let user = resolve_account(state, name, &identity).await?;
     create_ticket(state, user).await
 }

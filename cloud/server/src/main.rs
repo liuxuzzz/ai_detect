@@ -11,7 +11,7 @@ async fn main() -> anyhow::Result<()> {
     tracing::info!(address = %settings.bind_address, "server listening");
     let mut queue_task = tokio::spawn(task_runner::run(state.clone()));
     tokio::select! {
-        result = axum::serve(listener, routes::router(state)) => {
+        result = axum::serve(listener, routes::application(state, "static")) => {
             queue_task.abort();
             let _ = queue_task.await;
             result?;

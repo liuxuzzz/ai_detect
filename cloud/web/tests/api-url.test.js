@@ -2,35 +2,27 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { backendUrl } from '../src/api-url.js'
 
-test('API data and SSE URLs use the backend port on the current host', () => {
-  const options = { pageUrl: 'http://192.0.2.10:6600/tests?tab=mine#result' }
-  for (const path of ['/api/reports/upload', '/api/tasks/12/events', '/api/public/reports/report', '/api/public/shares/token']) {
-    assert.equal(backendUrl(path, options), `http://192.0.2.10:6601${path}`)
+test('data, uploads and SSE use the same domain and port as the page', () => {
+  for (const pageUrl of ['http://192.0.2.10:6600/tests?tab=mine#result', 'https://ai.example.test/r/report', 'https://[2001:db8::1]:8443/']) {
+    const origin = new URL(pageUrl).origin
+    for (const path of ['/api/reports/upload', '/api/tasks/12/events', '/api/public/reports/report', '/api/public/shares/token']) {
+      assert.equal(backendUrl(path, { pageUrl }), origin + path)
+    }
   }
 })
 
-test('custom ports and IPv6 keep the page protocol and host', () => {
-  assert.equal(backendUrl('/api/tasks', {
-    pageUrl: 'https://[2001:db8::1]:6600/', apiPort: '8443',
-  }), 'https://[2001:db8::1]:8443/api/tasks')
+test('HTTPS domains keep their normal HTTPS port without API configuration', () => {
+  assert.equal(backendUrl('/api/tasks?status=queued', { pageUrl: 'https://ai.example.test/' }), 'https://ai.example.test/api/tasks?status=queued')
 })
 
-test('an explicit backend origin or path works independently of the page', () => {
-  assert.equal(backendUrl('/api/tasks?status=queued', {
-    apiBaseUrl: ' https://api.example.test/cloud/ ',
-  }), 'https://api.example.test/cloud/api/tasks?status=queued')
-})
-
-test('Cloudflare API domains keep HTTPS and do not add the Docker port', () => {
-  assert.equal(backendUrl('/api/auth/options', {
-    apiBaseUrl: 'https://api.example.test', apiPort: '6601', pageUrl: 'https://ai.example.test/',
-  }), 'https://api.example.test/api/auth/options')
-})
-
-test('the startup runtime config overrides the build defaults', async () => {
-  globalThis.__AI_DETECT_CONFIG__ = { apiBaseUrl: 'https://runtime-api.example.test', apiPort: '6601' }
+test('legacy runtime API configuration cannot send requests to a different origin', async () => {
+  globalThis.location = { href: 'https://ai.example.test/r/report' }
+  globalThis.__AI_DETECT_CONFIG__ = { apiBaseUrl: 'https://old-api.example.test', apiPort: '6601' }
   try {
     const { apiUrl } = await import('../src/api-url.js?runtime-test')
-    assert.equal(apiUrl('/api/reports/upload'), 'https://runtime-api.example.test/api/reports/upload')
-  } finally { delete globalThis.__AI_DETECT_CONFIG__ }
+    assert.equal(apiUrl('/api/reports/upload'), 'https://ai.example.test/api/reports/upload')
+  } finally {
+    delete globalThis.location
+    delete globalThis.__AI_DETECT_CONFIG__
+  }
 })

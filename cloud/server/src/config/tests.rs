@@ -1,19 +1,5 @@
-use super::{database_url, public_url, secret};
+use super::{database_url, secret};
 use std::{collections::HashMap, fs};
-
-#[test]
-fn public_addresses_preserve_domains_without_container_ports() {
-    assert_eq!(
-        public_url("api", "https://api.example.com/").unwrap(),
-        "https://api.example.com"
-    );
-    assert_eq!(
-        public_url("api", "http://127.0.0.1:6601").unwrap(),
-        "http://127.0.0.1:6601"
-    );
-    assert!(public_url("api", "javascript:alert(1)").is_err());
-    assert!(public_url("api", "https://user:password@api.example.com").is_err());
-}
 
 #[test]
 fn database_parameters_preserve_special_characters_and_external_urls() {

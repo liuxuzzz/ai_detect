@@ -1,0 +1,8 @@
+.env*
+**/.env*
+server/target
+web/node_modules
+web/dist
+**/__pycache__
+**/.DS_Store
+**/._*

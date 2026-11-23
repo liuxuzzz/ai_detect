@@ -5,7 +5,7 @@ import urllib.error
 import urllib.request
 
 
-base = os.environ.get('CLOUD_URL', 'http://127.0.0.1:6601').rstrip('/')
+base = os.environ.get('CLOUD_URL', 'http://127.0.0.1:6600').rstrip('/')
 
 
 def request(path, body=None, token=None, method=None, expected=200):

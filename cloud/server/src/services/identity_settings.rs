@@ -1,5 +1,6 @@
 use crate::{
     error::{err, AppError, ErrorKind, ServiceResult},
+    services::site_settings,
     state::AppState,
 };
 use serde::{Deserialize, Serialize};
@@ -103,14 +104,14 @@ pub(crate) fn provider<'a>(
     Ok(provider)
 }
 
-pub(crate) fn callback_url(state: &AppState, provider: &str) -> String {
-    format!(
-        "{}/api/auth/oauth/{provider}/callback",
-        state.api_public_url
-    )
+pub(crate) async fn callback_url(state: &AppState, provider: &str) -> ServiceResult<String> {
+    site_settings::page_url(state, &format!("/api/auth/oauth/{provider}/callback")).await
 }
 
-pub(crate) fn public_admin_view(state: &AppState, config: &IdentityConfig) -> Value {
+pub(crate) async fn public_admin_view(
+    state: &AppState,
+    config: &IdentityConfig,
+) -> ServiceResult<Value> {
     let mut view = serde_json::to_value(config).expect("serializable configuration");
     view["smtp"]["password_set"] = json!(!config.smtp.password.is_empty());
     view["smtp"]["password"] = json!("");
@@ -122,9 +123,9 @@ pub(crate) fn public_admin_view(state: &AppState, config: &IdentityConfig) -> Va
         };
         view[name]["client_secret_set"] = json!(!provider.client_secret.is_empty());
         view[name]["client_secret"] = json!("");
-        view[name]["callback_url"] = json!(callback_url(state, name));
+        view[name]["callback_url"] = json!(callback_url(state, name).await?);
     }
-    view
+    Ok(view)
 }
 
 fn validate(config: &IdentityConfig) -> ServiceResult<()> {
@@ -205,5 +206,6 @@ pub(crate) async fn update(state: &AppState, input: IdentityUpdate) -> ServiceRe
         .await
         .map_err(AppError::internal)?;
     transaction.commit().await.map_err(AppError::internal)?;
-    Ok(public_admin_view(state, &config))
+    drop(db);
+    public_admin_view(state, &config).await
 }

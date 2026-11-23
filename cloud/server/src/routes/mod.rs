@@ -12,31 +12,42 @@ use axum::{
     Router,
 };
 
+mod web;
+pub use web::application;
+
 pub fn router(state: AppState) -> Router {
     middleware::apply(
         Router::new()
             .route("/health", get(health))
-            .nest("/api/auth", auth_routes())
-            .nest("/api/reports", report_routes())
-            .route("/api/dashboard", get(dashboard::dashboard))
-            .route("/api/public/rankings", get(dashboard::public_rankings))
-            .nest("/api/channels", upstream_routes())
-            .nest("/api/upstreams", upstream_routes())
-            .route("/api/tasks", get(tasks::list).post(tasks::create))
-            .route("/api/tasks/{id}", delete(tasks::delete))
-            .route("/api/tasks/{id}/retry", post(tasks::retry))
-            .route("/api/tasks/{id}/live", get(task_live::snapshot))
-            .route("/api/tasks/{id}/events", get(task_live::events))
-            .route("/api/prompts", get(prompts::available))
-            .nest("/api/admin", admin_routes())
-            .route("/api/public/reports/{slug}", get(reports::report))
-            .route("/api/public/shares/{token}", get(reports::share))
-            .layer(DefaultBodyLimit::max(32 * 1024 * 1024))
-            .fallback(|| async {
-                crate::error::err(crate::error::ErrorKind::NotFound, "API 不存在")
-            })
+            .nest("/api", api_routes())
+            .fallback(not_found)
             .with_state(state),
     )
+}
+
+fn api_routes() -> Router<AppState> {
+    Router::new()
+        .nest("/auth", auth_routes())
+        .nest("/reports", report_routes())
+        .route("/dashboard", get(dashboard::dashboard))
+        .route("/public/rankings", get(dashboard::public_rankings))
+        .nest("/channels", upstream_routes())
+        .nest("/upstreams", upstream_routes())
+        .route("/tasks", get(tasks::list).post(tasks::create))
+        .route("/tasks/{id}", delete(tasks::delete))
+        .route("/tasks/{id}/retry", post(tasks::retry))
+        .route("/tasks/{id}/live", get(task_live::snapshot))
+        .route("/tasks/{id}/events", get(task_live::events))
+        .route("/prompts", get(prompts::available))
+        .nest("/admin", admin_routes())
+        .route("/public/reports/{slug}", get(reports::report))
+        .route("/public/shares/{token}", get(reports::share))
+        .layer(DefaultBodyLimit::max(32 * 1024 * 1024))
+        .fallback(not_found)
+}
+
+async fn not_found() -> crate::error::AppError {
+    crate::error::err(crate::error::ErrorKind::NotFound, "API 不存在")
 }
 
 async fn health() -> axum::Json<serde_json::Value> {

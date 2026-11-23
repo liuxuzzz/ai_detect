@@ -9,7 +9,6 @@ async fn provider_linking_and_one_time_tickets_respect_account_state() {
         database_pool_size: 4,
         jwt_secret: "oauth-isolated-secret".into(),
         client_key_encryption_secret: None,
-        api_public_url: "http://localhost:6601".into(),
         bind_address: "127.0.0.1:0".parse().unwrap(),
         redis_url: "disabled".into(),
         task_daily_limit: 20,

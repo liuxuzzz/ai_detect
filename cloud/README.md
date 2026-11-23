@@ -1,6 +1,6 @@
 # AI质量检测云端
 
-Vue 前端与 Axum API 独立部署，PostgreSQL 保存账号和报告，Redis 提供缓存。前端 Nginx 只服务静态文件；浏览器和桌面客户端直接访问 API。
+Vue 页面和 Axum API 打包到同一个应用镜像，使用同一个访问地址。PostgreSQL 保存账号和报告，Redis 提供缓存，数据库和缓存不公开端口。
 
 ## 首次部署
 
@@ -9,31 +9,31 @@ cd cloud
 docker compose up -d --build
 ```
 
-无需创建 `.env` 或手填密码、密钥。启动时自动生成独立的随机数据库密码、签名密钥和加密密钥，保存在 `runtime_secrets` Docker 数据卷中，重启、重建容器时复用。数据库不映射公网端口。
+无需创建 `.env` 或配置 API 地址、密码、密钥。启动时自动生成独立的随机数据库密码、签名密钥和加密密钥，保存在 `runtime_secrets` Docker 数据卷中，重建容器时复用。
 
-启动完成后打开 `http://服务器IP:6600`；本机部署打开 `http://127.0.0.1:6600`。浏览器自动连接同一台服务器的 `6601` API 端口，服务器放行这两个端口即可。
+启动后打开 `http://服务器IP:6600`，客户端的「云端地址」也填写这个地址。新数据库的第一个成功注册账号自动成为超级管理员。
 
-需要自定义端口、API 域名或外部数据库时，再执行 `cp .env.example .env` 并修改对应项目。所有可选变量统一列在 [`.env.example`](.env.example)，包含中文说明；留空的密钥仍会自动生成。不要提交 `.env`。
+需要自定义端口或外部数据库时，再复制 [`.env.example`](.env.example) 为 `.env`，修改对应项目即可。默认只开放应用端口 `6600`，使用 `WEB_PORT` 调整。
 
-**升级已有站点时保留原 `.env`。** 其中已有的密码和密钥优先生效；旧版未单独设置加密密钥时，会保留原 JWT 密钥用于解密已有数据。如果检测到已有数据库但缺少原密码或签名密钥，且没有对应的持久化密钥文件，启动会停止并提示恢复原配置，不会重置数据库。备份时同时保留 PostgreSQL、Redis、`runtime_secrets` 数据卷和自定义 `.env`；`docker compose down` 保留数据，`down -v` 会删除它们。
+## 域名和 Cloudflare 部署
 
-首次打开网站后注册自己的账号。**新数据库的第一个成功注册账号自动成为超级管理员**；并发注册也只会选出一个。程序不再读取预置管理员邮箱/密码，不创建默认账号。超级管理员不能被后台禁用或取消权限。升级已有数据库会保留原有账号和密码，将最早的有效管理员标记为超级管理员。
+将自己的域名或 Cloudflare Tunnel 转发到应用的 `6600` 端口即可。例如浏览器访问 `https://ai.example.com`，客户端也填写 `https://ai.example.com`。页面、JSON API、上传和 SSE 都使用这个域名，无需另设 API 域名或 API 地址环境变量。
 
-## IP 和域名部署
+管理员首次通过浏览器登录时，系统会将浏览器地址记录到 PostgreSQL，用于分享链接和 OAuth 回调。更换域名时，在「管理中心 → 站点设置 → 站点地址」更新即可。未记录站点地址时，报告接口返回相对路径。
 
-前端站点地址无需环境变量：首次管理员通过网页登录时自动记录当前浏览器地址，保存到 PostgreSQL，用于报告分享与登录完成后的跳转。更换域名后，在「管理中心 → 站点设置 → 站点地址」更新即可，立即生效。纯 API 初始化且没有浏览器登录时，报告 API 返回相对页面路径；在后台保存站点地址后即可返回完整分享链接。
+## 从分开部署的旧版本升级
 
-| 场景 | 前端实际访问地址（自动记录） | `.env` 的 `WEB_API_BASE_URL` |
-| --- | --- | --- |
-| 本机开发 | `http://127.0.0.1:6600` | 留空，自动使用当前主机 |
-| IP 直连 | `http://服务器IP:6600` | 留空，自动使用当前服务器 IP |
-| Cloudflare/反向代理 | `https://ai.example.com` | `https://api.example.com` |
+保留原 `.env` 和数据卷，在 `cloud` 目录执行：
 
-IP 直连无需配置 API 地址。使用 Cloudflare/反向代理或启用第三方登录时，在 `.env` 中指定 API 公网地址；HTTPS 域名不会被自动补上 Docker 端口。`WEB_PORT`、`SERVER_PORT` 配置宿主机端口。分别把前端域名和 API 域名路由到对应服务即可；同机代理或 Cloudflare Tunnel 可将两个 `*_BIND_ADDRESS` 设为 `127.0.0.1`。
+```sh
+docker compose up -d --build --remove-orphans
+```
 
-修改 API 地址后执行 `docker compose up -d --force-recreate server web`。Web 在容器启动时生成 `app-config.js`，无需重新构建镜像。SMTP 和 OAuth 应用密钥不会写入此文件。HTTPS 页面须配 HTTPS API；客户端「云端 API 地址」填写 `WEB_API_BASE_URL`，不是前端地址。旧的 `PUBLIC_BASE_URL` 环境变量不再使用。
+Compose 会移除旧 `web`、`server` 容器，启动新的 `app` 容器。`WEB_PORT` 继续控制站点端口；旧的 `SERVER_PORT`、`WEB_API_BASE_URL` 和 `PUBLIC_BASE_URL` 已不再使用。客户端将原独立 API 地址改为浏览器中的站点地址，例如 `https://ai_detect.wv.gs/`。
 
-升级时，若已有 `.env` 明确设置了端口，请将 `WEB_PORT` 改为 `6600`、`SERVER_PORT` 改为 `6601`；IP 形式的 `WEB_API_BASE_URL` 和客户端云端 API 地址也使用 `6601`。站点通过 IP 加端口访问时，同时在后台更新「站点地址」为新的前端地址。
+升级时保留原数据库密码和密钥。旧版未单独设置加密密钥时，会保留原 JWT 密钥用于解密已有数据。如果检测到已有数据库却缺少原密码、签名密钥和对应持久化文件，初始化会停止并提示恢复原配置，不会重置数据库。
+
+备份时同时保留 PostgreSQL、Redis、`runtime_secrets` 数据卷及自定义 `.env`。`docker compose down` 保留数据；不要在升级时使用删除数据卷的 `down -v`。
 
 ## 邮箱注册和找回密码
 
@@ -49,10 +49,10 @@ IP 直连无需配置 API 地址。使用 Cloudflare/反向代理或启用第三
 
 | 提供商 | 公网 API 示例回调地址 |
 | --- | --- |
-| GitHub OAuth App | `https://api.example.com/api/auth/oauth/github/callback` |
-| Google Web OAuth Client | `https://api.example.com/api/auth/oauth/google/callback` |
+| GitHub OAuth App | `https://ai.example.com/api/auth/oauth/github/callback` |
+| Google Web OAuth Client | `https://ai.example.com/api/auth/oauth/google/callback` |
 
-地址来自 `.env` 中的 `WEB_API_BASE_URL`。Google 应用需开放 `openid email profile`，GitHub 使用 `read:user user:email`。Google 应用处于测试状态时需在其控制台添加测试用户。
+回调地址使用后台保存的站点地址。Google 应用需开放 `openid email profile`，GitHub 使用 `read:user user:email`。Google 应用处于测试状态时需在其控制台添加测试用户。
 
 第三方登录只接受提供商返回的已验证邮箱，使用一次性 state、浏览器绑定 cookie 和 PKCE。服务端处理授权回调，浏览器仅接收有效期 60 秒的一次性登录凭据，会话令牌通过 API 交换获得。关闭注册后，已关联账号仍可登录，但不能创建新账号。
 

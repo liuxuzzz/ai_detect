@@ -21,8 +21,8 @@ def free_port():
         return listener.getsockname()[1]
 
 
-def request(base, path, body=None, token=None, key=None):
-    headers = {"Content-Type": "application/json"}
+def request(base, path, body=None, token=None, key=None, origin=None):
+    headers = {"Content-Type": "application/json", "Origin": origin or base}
     if token:
         headers["Authorization"] = "Bearer " + token
     if key:
@@ -57,21 +57,14 @@ def scenario(options, mode):
             configuration.touch()
         override = work / "images.json"
         override.write_text(json.dumps({"services": {
-            "server": {"image": options.server_image},
-            "web": {"image": options.web_image},
+            "app": {"image": options.image},
         }}))
         variables = {line.split("=", 1)[0] for line in (CLOUD / ".env.example").read_text().splitlines()
                      if line and not line.startswith("#") and "=" in line}
         environment = {key: value for key, value in os.environ.items() if key not in variables}
-        environment.update(SERVER_BIND_ADDRESS="127.0.0.1", WEB_BIND_ADDRESS="127.0.0.1")
-        if mode == "empty":
-            # Exercise the real published defaults, without port overrides.
-            api_port, web_port = 6601, 6600
-        else:
-            api_port, web_port = free_port(), free_port()
-            while web_port == api_port:
-                web_port = free_port()
-            environment.update(SERVER_PORT=str(api_port), WEB_PORT=str(web_port))
+        environment.update(WEB_BIND_ADDRESS="127.0.0.1")
+        port = free_port()
+        environment.update(WEB_PORT=str(port))
         if mode == "explicit":
             environment.update(POSTGRES_PASSWORD="space ' \\ : / @ ? # %40 $",
                                JWT_SECRET="existing-installation-signing-secret")
@@ -83,17 +76,25 @@ def scenario(options, mode):
 
         def secrets():
             # Read hashes only; plaintext secrets never enter test output.
-            return compose("exec", "-T", "server", "sha256sum",
+            return compose("exec", "-T", "app", "sha256sum",
                            "/run/secrets/postgres_password", "/run/secrets/jwt_secret",
                            "/run/secrets/client_key_encryption_secret")
 
-        api, web = f"http://127.0.0.1:{api_port}", f"http://127.0.0.1:{web_port}"
+        api = web = f"http://127.0.0.1:{port}"
         try:
             compose("config", "--quiet")
             compose("up", "-d", "--no-build", "--pull", "missing")
             wait_ready(api, web)
-            runtime = request(web, "/app-config.js")
-            assert 'atob("")' in runtime and f'apiPort: "{api_port}"' in runtime
+            configuration_view = json.loads(compose("config", "--format", "json"))
+            assert set(configuration_view["services"]) == {"app", "postgres", "redis", "init-secrets"}
+            assert len(configuration_view["services"]["app"]["ports"]) == 1
+            assert "WEB_API_BASE_URL" not in configuration_view["services"]["app"]["environment"]
+            for path in ["/api/not-a-route", "/api/reports/upload/not-a-route"]:
+                try:
+                    request(web, path)
+                    raise AssertionError("Unknown API should return JSON 404")
+                except HTTPError as error:
+                    assert error.code == 404 and "error" in json.load(error)
             assert request(api, "/api/auth/options")["bootstrap_required"] is True
             credentials = {"email": "first-admin@example.test", "password": "isolated-first-start-password"}
             request(api, "/api/auth/register", credentials)
@@ -107,6 +108,15 @@ def scenario(options, mode):
                 "metadata": {"total_tokens": 2},
                 "data": {"version": 1, "output": "Persisted first-start result", "samples": [], "activities": [], "retries": []},
             })
+            assert report["owner_url"] == web + "/r/" + report["slug"]
+            assert '<div id="app">' in request(web, "/r/" + report["slug"])
+            assert '<div id="app">' in request(web, "/auth/callback")
+            owner = int(session["user"]["id"])
+            task = compose("exec", "-T", "postgres", "psql", "-U", "aijiance", "-d", "aijiance", "-Atq",
+                           "-v", "ON_ERROR_STOP=1", "-c",
+                           f"INSERT INTO async_tasks(owner_id,status,scheduled_for,model,live) VALUES ({owner},'completed',now(),'same-origin','{{\"output\":\"same-origin-sse\"}}') RETURNING id").strip()
+            stream = request(api, f"/api/tasks/{int(task)}/events", token=token)
+            assert 'event: snapshot' in stream and 'same-origin-sse' in stream
             before = secrets()
             if mode == "explicit":
                 hashes = [line.split()[0] for line in before.splitlines()]
@@ -132,8 +142,7 @@ def scenario(options, mode):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--server-image", required=True)
-    parser.add_argument("--web-image", required=True)
+    parser.add_argument("--image", required=True)
     options = parser.parse_args()
     for mode in ("empty", "example", "explicit"):
         scenario(options, mode)

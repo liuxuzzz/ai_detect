@@ -161,7 +161,7 @@ pub(super) async fn check(app: &Router, config: &Settings, admin: (&str, &str), 
         assert!(view[provider]["callback_url"]
             .as_str()
             .unwrap()
-            .starts_with(&config.api_public_url));
+            .starts_with("http://localhost:6600/api/auth/oauth/"));
         let start = request(
             app,
             Method::GET,

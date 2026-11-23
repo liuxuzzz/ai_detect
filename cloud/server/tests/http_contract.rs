@@ -19,6 +19,8 @@ mod site_address;
 mod task_management;
 #[path = "cases/upload_policy.rs"]
 mod upload_policy;
+#[path = "cases/web.rs"]
+mod web;
 
 async fn request(
     app: &Router,
@@ -168,9 +170,10 @@ async fn report_workflow_and_route_compatibility() {
         bind_address: "127.0.0.1:0".parse().unwrap(),
         redis_url: "disabled".into(),
         task_daily_limit: 20,
-        api_public_url: "http://localhost:6601".into(),
     };
-    let app = routes::router(AppState::from_settings(&settings).await.unwrap());
+    let state = AppState::from_settings(&settings).await.unwrap();
+    web::check(state.clone()).await;
+    let app = routes::router(state);
     let initial = request(&app, Method::GET, "/api/auth/options", None, None).await;
     assert_eq!(
         json_body(initial, StatusCode::OK).await["bootstrap_required"],

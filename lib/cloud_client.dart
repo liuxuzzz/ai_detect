@@ -16,7 +16,7 @@ class CloudClient {
   }) async {
     final base = normalizeCloudApiUrl(apiBaseUrl);
     if (base.isEmpty || clientKey.trim().isEmpty) {
-      throw ArgumentError('请先在全局设置中填写云端 API 地址和 Client Key');
+      throw ArgumentError('请先在全局设置中填写云端地址和 Client Key');
     }
     final uri = Uri.parse('$base/api/reports/upload');
     final parsedHost = Uri.tryParse(upstreamBaseUrl)?.host;
