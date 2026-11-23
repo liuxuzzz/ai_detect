@@ -11,7 +11,7 @@ docker compose up -d --build
 
 无需创建 `.env` 或手填密码、密钥。启动时自动生成独立的随机数据库密码、签名密钥和加密密钥，保存在 `runtime_secrets` Docker 数据卷中，重启、重建容器时复用。数据库不映射公网端口。
 
-启动完成后打开 `http://服务器IP:8080`；本机部署打开 `http://127.0.0.1:8080`。浏览器自动连接同一台服务器的 `8081` API 端口，服务器放行这两个端口即可。
+启动完成后打开 `http://服务器IP:6600`；本机部署打开 `http://127.0.0.1:6600`。浏览器自动连接同一台服务器的 `6601` API 端口，服务器放行这两个端口即可。
 
 需要自定义端口、API 域名或外部数据库时，再执行 `cp .env.example .env` 并修改对应项目。所有可选变量统一列在 [`.env.example`](.env.example)，包含中文说明；留空的密钥仍会自动生成。不要提交 `.env`。
 
@@ -25,13 +25,15 @@ docker compose up -d --build
 
 | 场景 | 前端实际访问地址（自动记录） | `.env` 的 `WEB_API_BASE_URL` |
 | --- | --- | --- |
-| 本机开发 | `http://127.0.0.1:8080` | 留空，自动使用当前主机 |
-| IP 直连 | `http://服务器IP:8080` | 留空，自动使用当前服务器 IP |
+| 本机开发 | `http://127.0.0.1:6600` | 留空，自动使用当前主机 |
+| IP 直连 | `http://服务器IP:6600` | 留空，自动使用当前服务器 IP |
 | Cloudflare/反向代理 | `https://ai.example.com` | `https://api.example.com` |
 
 IP 直连无需配置 API 地址。使用 Cloudflare/反向代理或启用第三方登录时，在 `.env` 中指定 API 公网地址；HTTPS 域名不会被自动补上 Docker 端口。`WEB_PORT`、`SERVER_PORT` 配置宿主机端口。分别把前端域名和 API 域名路由到对应服务即可；同机代理或 Cloudflare Tunnel 可将两个 `*_BIND_ADDRESS` 设为 `127.0.0.1`。
 
 修改 API 地址后执行 `docker compose up -d --force-recreate server web`。Web 在容器启动时生成 `app-config.js`，无需重新构建镜像。SMTP 和 OAuth 应用密钥不会写入此文件。HTTPS 页面须配 HTTPS API；客户端「云端 API 地址」填写 `WEB_API_BASE_URL`，不是前端地址。旧的 `PUBLIC_BASE_URL` 环境变量不再使用。
+
+升级时，若已有 `.env` 明确设置了端口，请将 `WEB_PORT` 改为 `6600`、`SERVER_PORT` 改为 `6601`；IP 形式的 `WEB_API_BASE_URL` 和客户端云端 API 地址也使用 `6601`。站点通过 IP 加端口访问时，同时在后台更新「站点地址」为新的前端地址。
 
 ## 邮箱注册和找回密码
 

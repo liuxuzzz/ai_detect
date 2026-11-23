@@ -11,5 +11,5 @@ WORKDIR /app
 COPY --from=build /src/target/release/aijiance-cloud /usr/local/bin/aijiance-cloud
 ENV APP_ENV=prod
 ENV RUST_LOG=info
-EXPOSE 8080
+EXPOSE 6601
 CMD ["aijiance-cloud"]

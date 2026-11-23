@@ -31,7 +31,7 @@ async fn task_controls_cancel_execution_and_fence_late_results() {
         bind_address: "127.0.0.1:0".parse().unwrap(),
         redis_url: "disabled".into(),
         task_daily_limit: 20,
-        api_public_url: "http://localhost:8081".into(),
+        api_public_url: "http://localhost:6601".into(),
     };
     let state = AppState::from_settings(&settings).await.unwrap();
     let db = state.connection().await.unwrap();

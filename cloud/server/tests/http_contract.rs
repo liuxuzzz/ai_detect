@@ -30,7 +30,7 @@ async fn request(
     let mut request = Request::builder()
         .method(method)
         .uri(path)
-        .header(header::ORIGIN, "http://localhost:8080");
+        .header(header::ORIGIN, "http://localhost:6600");
     if let Some((name, value)) = auth {
         request = request.header(name, value);
     }
@@ -168,7 +168,7 @@ async fn report_workflow_and_route_compatibility() {
         bind_address: "127.0.0.1:0".parse().unwrap(),
         redis_url: "disabled".into(),
         task_daily_limit: 20,
-        api_public_url: "http://localhost:8081".into(),
+        api_public_url: "http://localhost:6601".into(),
     };
     let app = routes::router(AppState::from_settings(&settings).await.unwrap());
     let initial = request(&app, Method::GET, "/api/auth/options", None, None).await;
@@ -319,7 +319,7 @@ async fn report_workflow_and_route_compatibility() {
     assert!(details.get("html").is_none());
     assert_eq!(
         uploaded["owner_url"],
-        format!("http://localhost:8080/r/{slug}")
+        format!("http://localhost:6600/r/{slug}")
     );
     let anonymous = request(&app, Method::GET, &details_path, None, None).await;
     assert!(json_body(anonymous, StatusCode::OK).await["my_score"].is_null());
@@ -336,7 +336,7 @@ async fn report_workflow_and_route_compatibility() {
     let share_token = share["token"].as_str().unwrap();
     assert_eq!(
         share["url"],
-        format!("http://localhost:8080/share/{share_token}")
+        format!("http://localhost:6600/share/{share_token}")
     );
     let response = request(
         &app,

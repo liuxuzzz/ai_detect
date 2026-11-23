@@ -63,11 +63,15 @@ def scenario(options, mode):
         variables = {line.split("=", 1)[0] for line in (CLOUD / ".env.example").read_text().splitlines()
                      if line and not line.startswith("#") and "=" in line}
         environment = {key: value for key, value in os.environ.items() if key not in variables}
-        api_port, web_port = free_port(), free_port()
-        while web_port == api_port:
-            web_port = free_port()
-        environment.update(SERVER_BIND_ADDRESS="127.0.0.1", WEB_BIND_ADDRESS="127.0.0.1",
-                           SERVER_PORT=str(api_port), WEB_PORT=str(web_port))
+        environment.update(SERVER_BIND_ADDRESS="127.0.0.1", WEB_BIND_ADDRESS="127.0.0.1")
+        if mode == "empty":
+            # Exercise the real published defaults, without port overrides.
+            api_port, web_port = 6601, 6600
+        else:
+            api_port, web_port = free_port(), free_port()
+            while web_port == api_port:
+                web_port = free_port()
+            environment.update(SERVER_PORT=str(api_port), WEB_PORT=str(web_port))
         if mode == "explicit":
             environment.update(POSTGRES_PASSWORD="space ' \\ : / @ ? # %40 $",
                                JWT_SECRET="existing-installation-signing-secret")

@@ -142,7 +142,7 @@ pub(super) async fn check(
             Method::PUT,
             "/api/admin/settings",
             Some(admin),
-            Some(json!({"site_url":"http://localhost:8080"})),
+            Some(json!({"site_url":"http://localhost:6600"})),
         )
         .await,
         StatusCode::OK,

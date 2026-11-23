@@ -41,7 +41,7 @@ services:
     build: ./server
     restart: unless-stopped
     ports:
-      - "${SERVER_BIND_ADDRESS:-0.0.0.0}:${SERVER_PORT:-8081}:8080"
+      - "${SERVER_BIND_ADDRESS:-0.0.0.0}:${SERVER_PORT:-6601}:6601"
     environment:
       DATABASE_URL: ${DATABASE_URL:-}
       POSTGRES_HOST: postgres
@@ -53,9 +53,9 @@ services:
       JWT_SECRET_FILE: /run/secrets/jwt_secret
       CLIENT_KEY_ENCRYPTION_SECRET: ${CLIENT_KEY_ENCRYPTION_SECRET:-}
       CLIENT_KEY_ENCRYPTION_SECRET_FILE: /run/secrets/client_key_encryption_secret
-      API_PUBLIC_BASE_URL: ${WEB_API_BASE_URL:-http://127.0.0.1:8081}
+      API_PUBLIC_BASE_URL: ${WEB_API_BASE_URL:-http://127.0.0.1:6601}
       APP_ENV: prod
-      BIND_ADDRESS: 0.0.0.0:8080
+      BIND_ADDRESS: 0.0.0.0:6601
       RUST_LOG: ${RUST_LOG:-info}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379}
       TASK_DAILY_LIMIT: ${TASK_DAILY_LIMIT:-20}
@@ -72,10 +72,10 @@ services:
     build: ./web
     environment:
       WEB_API_BASE_URL: ${WEB_API_BASE_URL:-}
-      API_PORT: ${SERVER_PORT:-8081}
+      API_PORT: ${SERVER_PORT:-6601}
     restart: unless-stopped
     ports:
-      - "${WEB_BIND_ADDRESS:-0.0.0.0}:${WEB_PORT:-8080}:80"
+      - "${WEB_BIND_ADDRESS:-0.0.0.0}:${WEB_PORT:-6600}:80"
 volumes:
   postgres_data:
   redis_data:

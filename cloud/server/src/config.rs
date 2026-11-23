@@ -31,7 +31,7 @@ impl Settings {
                 "WEB_API_BASE_URL",
                 &optional(
                     "API_PUBLIC_BASE_URL",
-                    &optional("WEB_API_BASE_URL", "http://127.0.0.1:8081"),
+                    &optional("WEB_API_BASE_URL", "http://127.0.0.1:6601"),
                 ),
             )?,
             bind_address: optional("BIND_ADDRESS", &defaults.bind_address)

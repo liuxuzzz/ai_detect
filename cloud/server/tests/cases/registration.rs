@@ -24,7 +24,7 @@ async fn set_registration(app: &Router, admin: (&str, &str), enabled: bool) {
     assert_eq!(response.headers()[header::CACHE_CONTROL], "no-store");
     assert_eq!(
         json_body(response, StatusCode::OK).await,
-        json!({"site_url":"http://localhost:8080","registration_enabled": enabled, "upload_limit": 100, "upload_window_seconds": 86400})
+        json!({"site_url":"http://localhost:6600","registration_enabled": enabled, "upload_limit": 100, "upload_window_seconds": 86400})
     );
     assert_settings(app, enabled).await;
 }
@@ -54,7 +54,7 @@ pub(super) async fn check(
     assert_eq!(response.headers()[header::CACHE_CONTROL], "no-store");
     assert_eq!(
         json_body(response, StatusCode::OK).await,
-        json!({"site_url":"http://localhost:8080","registration_enabled": true, "upload_limit": 100, "upload_window_seconds": 86400})
+        json!({"site_url":"http://localhost:6600","registration_enabled": true, "upload_limit": 100, "upload_window_seconds": 86400})
     );
     for invalid in [
         json!({}),

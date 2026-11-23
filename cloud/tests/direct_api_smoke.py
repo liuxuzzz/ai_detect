@@ -103,7 +103,7 @@ with urlopen(web, timeout=15) as response:
     html = response.read().decode()
 bundle = re.search(r'src="([^"]+\.js)"', html).group(1)
 with urlopen(web + bundle, timeout=15) as response:
-    assert '8081' in response.read().decode()
+    assert '6601' in response.read().decode()
 for path in ('/api/public/rankings', '/health'):
     try:
         urlopen(web + path, timeout=15)

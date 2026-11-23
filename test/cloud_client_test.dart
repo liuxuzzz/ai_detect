@@ -104,14 +104,14 @@ void main() {
     expect(body['metadata'], containsPair('rpm', 2.0));
     expect(body['metadata'], containsPair('tpm', 900.0));
     await cloud.uploadReport(
-      apiBaseUrl: 'http://192.0.2.10:8080/',
+      apiBaseUrl: 'http://192.0.2.10:6600/',
       clientKey: 'aij_test',
       diagnostic: d,
       upstreamBaseUrl: 'https://api.example.com/v1',
     );
     expect(
       client.request!.url.toString(),
-      'http://192.0.2.10:8080/api/reports/upload',
+      'http://192.0.2.10:6600/api/reports/upload',
     );
   });
 }

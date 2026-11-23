@@ -23,7 +23,7 @@ async fn browser_preflights_allow_authentication_uploads_and_sse() {
                 Request::builder()
                     .method(Method::OPTIONS)
                     .uri("/api/check")
-                    .header(header::ORIGIN, "http://localhost:8080")
+                    .header(header::ORIGIN, "http://localhost:6600")
                     .header(header::ACCESS_CONTROL_REQUEST_METHOD, method)
                     .header(header::ACCESS_CONTROL_REQUEST_HEADERS, requested_headers)
                     .body(Body::empty())

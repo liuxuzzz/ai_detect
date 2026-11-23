@@ -1,6 +1,6 @@
 // Use the page's hostname by default so a published build works via DNS or IP.
 // An explicit base URL also supports APIs deployed on a separate host or path.
-export function backendUrl(path, { apiBaseUrl = '', apiPort = '8081', pageUrl = globalThis.location?.href } = {}) {
+export function backendUrl(path, { apiBaseUrl = '', apiPort = '6601', pageUrl = globalThis.location?.href } = {}) {
   let base
   if (apiBaseUrl.trim()) {
     base = new URL(apiBaseUrl.trim().replace(/\/+$/, '') + '/')

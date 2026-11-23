@@ -161,7 +161,7 @@ class _SettingsDialogState extends State<SettingsDialog> {
                   enabled: !busy,
                   decoration: const InputDecoration(
                     labelText: '云端 API 地址',
-                    hintText: 'http://127.0.0.1:8081',
+                    hintText: 'http://127.0.0.1:6601',
                     helperText: '填写自己的服务器 IP:端口，或自定义 HTTPS API 域名',
                   ),
                   keyboardType: TextInputType.url,
