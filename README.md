@@ -10,6 +10,18 @@ AI质量检测包含桌面客户端和云端服务两部分。
 
 当前版本为 **v0.1.1**。项目地址：[ai_detect](https://github.com/liuxuzzz/ai_detect)，安装包可在 [GitHub Releases](https://github.com/liuxuzzz/ai_detect/releases) 下载。
 
+## 界面预览
+
+以下截图展示云端的登录、上传限制、站点地址和注册设置。截图中的账号、域名和数据均为示例内容。
+
+| 云端登录 | 站点设置 |
+| --- | --- |
+| ![云端登录](docs/screenshots/cloud-login.jpg) | ![站点地址和上传限制](docs/screenshots/cloud-site-settings.jpg) |
+
+| 上传限制 | 注册设置 |
+| --- | --- |
+| ![上传限制设置](docs/screenshots/cloud-upload-settings.jpg) | ![注册开关](docs/screenshots/cloud-registration-settings.jpg) |
+
 ## 快速使用
 
 ### 使用桌面客户端
