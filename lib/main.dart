@@ -171,7 +171,16 @@ class _HarnessHomeState extends State<HarnessHome> {
   String status = '就绪';
   int outputVersion = 0;
   bool sidebarExpanded = true;
-  int workspaceTab = 0;
+  // The null entry also lets an empty workspace switch tabs before adding a channel.
+  final workspaceTabs = <String?, int>{};
+  final viewedHistories = <String, Diagnostic>{};
+  int get workspaceTab => workspaceTabs[selected?.id] ?? 0;
+  set workspaceTab(int value) {
+    workspaceTabs[selected?.id] = value;
+  }
+
+  bool get viewingHistory => viewedHistories.containsKey(selected?.id);
+  bool get channelRunning => activeRuns[selected?.id]?.running == true;
   String testModel = '';
   String reasoningEffort = 'default';
   String detectionMode = 'agent';
@@ -212,11 +221,14 @@ class _HarnessHomeState extends State<HarnessHome> {
     run?.cancellation.cancel();
     if (run != null) {
       run.status = '正在停止…';
-      setState(() => status = run.status);
+      setState(() {
+        if (!viewingHistory) status = run.status;
+      });
     }
   }
 
   void _showRun(_RunState run) {
+    last = run.last;
     liveOutput = run.output;
     liveActivities = List.of(run.activities);
     liveRetries = List.of(run.retries);
@@ -234,7 +246,7 @@ class _HarnessHomeState extends State<HarnessHome> {
   }
 
   void _syncRun(_RunState run, {bool rebuild = true}) {
-    if (!mounted || selected?.id != run.upstreamId) return;
+    if (!mounted || selected?.id != run.upstreamId || viewingHistory) return;
     _showRun(run);
     if (rebuild) {
       setState(() {});
@@ -272,15 +284,9 @@ class _HarnessHomeState extends State<HarnessHome> {
       selected = nextSelected;
       testModel = nextModel;
       final available = reasoningOptionsForModel(nextModel);
-      final known =
-          nextSelected != null && _reasoningEnabledFor(nextSelected, nextModel);
-      reasoningEffort = known && available.any((e) => e.id == savedReasoning)
-          ? savedReasoning!
-          : known
-          ? available.first.id
-          : (savedReasoning?.trim().isNotEmpty == true
-                ? savedReasoning!
-                : available.first.id);
+      reasoningEffort = savedReasoning?.trim().isNotEmpty == true
+          ? savedReasoning!.trim()
+          : available.first.id;
       customReasoning.text =
           nextSelected != null && _reasoningEnabledFor(nextSelected, nextModel)
           ? ''
@@ -349,7 +355,8 @@ class _HarnessHomeState extends State<HarnessHome> {
     final upstream = selected!;
     if (activeRuns[upstream.id]?.running == true) return;
     final model = testModel.trim().isEmpty ? upstream.selectedModel : testModel;
-    final runReasoningEffort = _reasoningEnabledFor(upstream, model)
+    final runReasoningEffort =
+        !hasKnownReasoningFormat(model) || _reasoningEnabledFor(upstream, model)
         ? reasoningEffort
         : 'default';
     final runDetectionMode = detectionMode;
@@ -377,6 +384,7 @@ class _HarnessHomeState extends State<HarnessHome> {
     }
     historySelection++;
     loadingHistoryId = null;
+    viewedHistories.remove(upstream.id);
     final cancellation = DiagnosticCancellation();
     activeCancellation = cancellation;
     final started = DateTime.now();
@@ -544,7 +552,10 @@ class _HarnessHomeState extends State<HarnessHome> {
             exchanges[attempt - 1] = exchange;
           }
           run.exchanges = exchanges;
-          if (mounted && selected?.id == run.upstreamId && workspaceTab == 3) {
+          if (mounted &&
+              selected?.id == run.upstreamId &&
+              !viewingHistory &&
+              workspaceTab == 3) {
             exchangeDetails.value = List.unmodifiable(exchanges);
           }
           _syncRun(run, rebuild: false);
@@ -685,8 +696,7 @@ class _HarnessHomeState extends State<HarnessHome> {
               : error.isEmpty
               ? '检测完成'
               : '检测完成（含错误）';
-          if (selected?.id == run.upstreamId) {
-            last = d;
+          if (selected?.id == run.upstreamId && !viewingHistory) {
             _showRun(run);
           }
         });
@@ -696,8 +706,7 @@ class _HarnessHomeState extends State<HarnessHome> {
         setState(() {
           run.last = d;
           run.status = '记录保存失败：$e';
-          if (selected?.id == run.upstreamId) {
-            last = d;
+          if (selected?.id == run.upstreamId && !viewingHistory) {
             _showRun(run);
           }
         });
@@ -706,8 +715,10 @@ class _HarnessHomeState extends State<HarnessHome> {
       run.running = false;
       if (mounted && selected?.id == run.upstreamId) {
         setState(() {
-          _showRun(run);
-          outputVersion++;
+          if (!viewingHistory) {
+            _showRun(run);
+            outputVersion++;
+          }
         });
       }
     }
@@ -759,7 +770,7 @@ class _HarnessHomeState extends State<HarnessHome> {
         const Spacer(),
         IconButton(
           tooltip: '全局设置',
-          onPressed: running ? null : _openSettings,
+          onPressed: channelRunning ? null : _openSettings,
           icon: const Icon(Icons.settings_outlined),
         ),
       ],
@@ -893,7 +904,7 @@ class _HarnessHomeState extends State<HarnessHome> {
           ),
         const Divider(),
         TextButton.icon(
-          onPressed: running ? null : _openSettings,
+          onPressed: channelRunning ? null : _openSettings,
           icon: const Icon(Icons.settings_outlined, size: 18),
           label: const Text('全局设置'),
         ),
@@ -1047,8 +1058,15 @@ class _HarnessHomeState extends State<HarnessHome> {
             ),
             const SizedBox(width: 8),
             if (status != '历史记录') ...[_statusPill(), const SizedBox(width: 8)],
+            if (viewingHistory && activeRuns.containsKey(selected?.id)) ...[
+              TextButton(
+                onPressed: _returnToRun,
+                child: Text(channelRunning ? '返回当前测试' : '返回最近测试'),
+              ),
+              const SizedBox(width: 8),
+            ],
             FilledButton.icon(
-              onPressed: running
+              onPressed: channelRunning
                   ? (selected == null ||
                             activeRuns[selected!.id]
                                     ?.cancellation
@@ -1060,11 +1078,13 @@ class _HarnessHomeState extends State<HarnessHome> {
                   ? null
                   : _run,
               icon: Icon(
-                running ? Icons.stop_circle_outlined : Icons.play_arrow_rounded,
+                channelRunning
+                    ? Icons.stop_circle_outlined
+                    : Icons.play_arrow_rounded,
               ),
-              label: Text(running ? '停止检测' : '开始 AI 检测'),
+              label: Text(channelRunning ? '停止检测' : '开始 AI 检测'),
               style: FilledButton.styleFrom(
-                backgroundColor: running ? red : teal,
+                backgroundColor: channelRunning ? red : teal,
                 foregroundColor: Colors.white,
                 padding: const EdgeInsets.symmetric(
                   horizontal: 18,
@@ -1153,9 +1173,6 @@ class _HarnessHomeState extends State<HarnessHome> {
         : selected!.models;
     final modelValue = models.contains(testModel) ? testModel : null;
     final options = reasoningOptionsForModel(testModel);
-    final reasoningValue = options.any((option) => option.id == reasoningEffort)
-        ? reasoningEffort
-        : options.first.id;
     final known = _reasoningEnabledFor(selected!, testModel);
     return Wrap(
       spacing: 10,
@@ -1166,7 +1183,7 @@ class _HarnessHomeState extends State<HarnessHome> {
         Container(
           height: 38,
           padding: const EdgeInsets.symmetric(horizontal: 10),
-          decoration: _dropdownBox(disabled: running),
+          decoration: _dropdownBox(disabled: channelRunning),
           child: DropdownButtonHideUnderline(
             child: DropdownButton<String>(
               value: detectionMode,
@@ -1188,7 +1205,7 @@ class _HarnessHomeState extends State<HarnessHome> {
                   child: Text('单轮流式', style: TextStyle(fontSize: 12)),
                 ),
               ],
-              onChanged: running
+              onChanged: channelRunning
                   ? null
                   : (value) async {
                       if (value == null) return;
@@ -1206,7 +1223,7 @@ class _HarnessHomeState extends State<HarnessHome> {
             child: Container(
               height: 38,
               padding: const EdgeInsets.symmetric(horizontal: 10),
-              decoration: _dropdownBox(disabled: running),
+              decoration: _dropdownBox(disabled: channelRunning),
               child: DropdownButtonHideUnderline(
                 child: DropdownButton<String>(
                   isExpanded: true,
@@ -1226,7 +1243,7 @@ class _HarnessHomeState extends State<HarnessHome> {
                         ),
                       )
                       .toList(),
-                  onChanged: running
+                  onChanged: channelRunning
                       ? null
                       : (value) {
                           if (value != null) _selectTestModel(value);
@@ -1242,7 +1259,7 @@ class _HarnessHomeState extends State<HarnessHome> {
           ),
         const Text('推理强度', style: TextStyle(color: muted, fontSize: 11)),
         if (known)
-          _reasoningPicker(options, reasoningValue)
+          _reasoningPicker(options, reasoningEffort)
         else if (hasKnownReasoningFormat(testModel))
           Container(
             height: 38,
@@ -1259,7 +1276,7 @@ class _HarnessHomeState extends State<HarnessHome> {
             width: 190,
             child: TextField(
               controller: customReasoning,
-              enabled: !running,
+              enabled: !channelRunning,
               onChanged: _setCustomReasoning,
               decoration: const InputDecoration(
                 isDense: true,
@@ -1276,7 +1293,7 @@ class _HarnessHomeState extends State<HarnessHome> {
     List<ReasoningOption> options,
     String selectedValue,
   ) => PopupMenuButton<String>(
-    enabled: !running && options.length > 1,
+    enabled: !channelRunning && options.length > 1,
     tooltip: '选择推理强度',
     position: PopupMenuPosition.under,
     elevation: 8,
@@ -1287,7 +1304,14 @@ class _HarnessHomeState extends State<HarnessHome> {
     ),
     onSelected: _selectReasoning,
     itemBuilder: (_) => [
-      for (final option in options)
+      for (final option in [
+        ...options,
+        if (!options.any((option) => option.id == selectedValue))
+          ReasoningOption(
+            selectedValue,
+            reasoningLabel(testModel, selectedValue),
+          ),
+      ])
         PopupMenuItem(
           value: option.id,
           height: 42,
@@ -1305,17 +1329,18 @@ class _HarnessHomeState extends State<HarnessHome> {
             ],
           ),
         ),
+      const PopupMenuItem(value: '__custom__', child: Text('自定义…')),
     ],
     child: Container(
       width: 190,
       height: 38,
       padding: const EdgeInsets.symmetric(horizontal: 11),
-      decoration: _dropdownBox(disabled: running),
+      decoration: _dropdownBox(disabled: channelRunning),
       child: Row(
         children: [
           Expanded(
             child: Text(
-              options.firstWhere((option) => option.id == selectedValue).label,
+              reasoningLabel(testModel, selectedValue),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
@@ -1325,7 +1350,7 @@ class _HarnessHomeState extends State<HarnessHome> {
           Icon(
             Icons.expand_more_rounded,
             size: 18,
-            color: running ? muted : teal,
+            color: channelRunning ? muted : teal,
           ),
         ],
       ),
@@ -1615,8 +1640,10 @@ class _HarnessHomeState extends State<HarnessHome> {
       selectedAttempt.value = 0;
       outputVersion++;
       outputRevision.value++;
-      if (existingRun != null) {
-        last = existingRun.last;
+      final history = viewedHistories[upstream.id];
+      if (history != null) {
+        _showHistory(history);
+      } else if (existingRun != null) {
         _showRun(existingRun);
       } else {
         liveActivities = [];
@@ -1643,15 +1670,12 @@ class _HarnessHomeState extends State<HarnessHome> {
         : await db.setting('reasoning:$upstreamId:$model');
     if (!mounted || selected?.id != upstreamId || testModel != model) return;
     final options = reasoningOptionsForModel(model);
-    final known = selected != null && _reasoningEnabledFor(selected!, model);
-    final chosen = known && options.any((option) => option.id == saved)
-        ? saved!
-        : known
-        ? options.first.id
-        : (saved?.trim().isNotEmpty == true ? saved! : options.first.id);
+    final chosen = saved?.trim().isNotEmpty == true
+        ? saved!.trim()
+        : options.first.id;
     setState(() {
       reasoningEffort = chosen;
-      customReasoning.text = known || chosen == 'default' ? '' : chosen;
+      customReasoning.text = chosen == 'default' ? '' : chosen;
     });
   }
 
@@ -1667,6 +1691,43 @@ class _HarnessHomeState extends State<HarnessHome> {
   }
 
   Future<void> _selectReasoning(String value) async {
+    if (value == '__custom__') {
+      var draft = reasoningEffort == 'default' ? '' : reasoningEffort;
+      final custom = await showDialog<String>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('自定义推理强度'),
+          content: TextFormField(
+            initialValue: draft,
+            onChanged: (value) => draft = value,
+            autofocus: true,
+            decoration: const InputDecoration(
+              labelText: '参数值',
+              hintText: '填写上游支持的 reasoning_effort 值',
+            ),
+            onFieldSubmitted: (value) {
+              if (value.trim().isNotEmpty) Navigator.pop(context, value.trim());
+            },
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('取消'),
+            ),
+            FilledButton(
+              onPressed: () {
+                if (draft.trim().isNotEmpty) {
+                  Navigator.pop(context, draft.trim());
+                }
+              },
+              child: const Text('保存'),
+            ),
+          ],
+        ),
+      );
+      if (!mounted || custom == null) return;
+      value = custom;
+    }
     setState(() => reasoningEffort = value);
     if (selected != null && testModel.isNotEmpty) {
       await db.setSetting('reasoning:${selected!.id}:$testModel', value);
@@ -1681,40 +1742,19 @@ class _HarnessHomeState extends State<HarnessHome> {
   }
 
   Future<void> _openHistory(Map<String, Object?> row) async {
-    if (running) return;
     final version = ++historySelection;
     final id = row['id'] as String;
     setState(() => loadingHistoryId = id);
     try {
       final read = await db.diagnosticRead(id, includeChunks: false);
       final diagnostic = read?.diagnostic;
-      if (!mounted || version != historySelection || running) return;
+      if (!mounted || version != historySelection) return;
       if (diagnostic == null) throw StateError('记录不存在');
-      exchangeDetails.value = diagnostic.exchanges;
-      liveExchanges = diagnostic.exchanges;
       setState(() {
         loadingHistoryId = null;
-        last = diagnostic;
-        liveOutput = diagnostic.output;
-        liveActivities = diagnostic.activities;
-        liveRetries = diagnostic.retries;
-        runStarted = DateTime.tryParse(diagnostic.startedAt);
-        liveTcpConnectMs = diagnostic.tcpConnectMs;
-        testModel = diagnostic.model;
-        reasoningEffort =
-            selected != null &&
-                _reasoningEnabledFor(selected!, diagnostic.model)
-            ? reasoningOptionsForModel(diagnostic.model).first.id
-            : 'default';
-        customReasoning.text = '';
-        selectedAttempt.value = 0;
-        livePoints = diagnostic.points;
-        liveTokens = diagnostic.outputTokens;
-        liveTps = 0;
-        outputVersion++;
-        outputRevision.value++;
+        viewedHistories[diagnostic.upstreamId] = diagnostic;
+        _showHistory(diagnostic);
         workspaceTab = 0;
-        status = '历史记录';
       });
     } catch (e) {
       if (mounted && version == historySelection) {
@@ -1726,8 +1766,42 @@ class _HarnessHomeState extends State<HarnessHome> {
     }
   }
 
+  void _showHistory(Diagnostic diagnostic) {
+    last = diagnostic;
+    running = false;
+    liveOutput = diagnostic.output;
+    liveActivities = diagnostic.activities;
+    liveRetries = diagnostic.retries;
+    liveExchanges = diagnostic.exchanges;
+    exchangeDetails.value = diagnostic.exchanges;
+    runStarted = DateTime.tryParse(diagnostic.startedAt);
+    liveTcpConnectMs = diagnostic.tcpConnectMs;
+    liveTtft = diagnostic.ttftMs;
+    selectedAttempt.value = 0;
+    livePoints = diagnostic.points;
+    liveTokens = diagnostic.outputTokens;
+    liveTps = 0;
+    outputVersion++;
+    outputRevision.value++;
+    status = '历史记录';
+  }
+
+  void _returnToRun() {
+    final run = activeRuns[selected?.id];
+    if (run == null) return;
+    historySelection++;
+    setState(() {
+      loadingHistoryId = null;
+      viewedHistories.remove(run.upstreamId);
+      selectedAttempt.value = 0;
+      _showRun(run);
+      outputVersion++;
+      outputRevision.value++;
+    });
+  }
+
   Future<void> _deleteHistory(Map<String, Object?> row) async {
-    if (running) return;
+    if (channelRunning) return;
     final id = row['id'] as String;
     final confirmed = await showDialog<bool>(
       context: context,
@@ -1748,6 +1822,7 @@ class _HarnessHomeState extends State<HarnessHome> {
     );
     if (confirmed != true || !mounted) return;
     await db.deleteDiagnostic(id);
+    viewedHistories.removeWhere((_, diagnostic) => diagnostic.id == id);
     for (final entry in activeRuns.entries.toList()) {
       if (entry.value.last?.id == id && !entry.value.running) {
         activeRuns.remove(entry.key);
@@ -1847,7 +1922,7 @@ class _HarnessHomeState extends State<HarnessHome> {
               child: InkWell(
                 key: ValueKey('history-${row['id']}'),
                 borderRadius: BorderRadius.circular(6),
-                onTap: running ? null : () => _openHistory(row),
+                onTap: () => _openHistory(row),
                 child: Padding(
                   padding: const EdgeInsets.all(9),
                   child: Column(
@@ -1915,7 +1990,7 @@ class _HarnessHomeState extends State<HarnessHome> {
                 child: IconButton(
                   key: ValueKey('history-delete-${row['id']}'),
                   tooltip: '删除测试记录',
-                  onPressed: running ? null : () => _deleteHistory(row),
+                  onPressed: channelRunning ? null : () => _deleteHistory(row),
                   icon: const Icon(Icons.delete_outline_rounded, size: 18),
                   style: IconButton.styleFrom(
                     foregroundColor: muted,

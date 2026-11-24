@@ -80,7 +80,7 @@ List<ReasoningOption> reasoningOptionsForModel(String model) {
       ReasoningOption('high', '高 (high)'),
     ];
   }
-  if (vendor == ReasoningVendor.openAi || vendor == ReasoningVendor.grok) {
+  if (vendor == ReasoningVendor.grok) {
     return const [
       ReasoningOption('default', '默认 (default)'),
       ReasoningOption('minimal', '极低 (minimal)'),
@@ -89,29 +89,21 @@ List<ReasoningOption> reasoningOptionsForModel(String model) {
       ReasoningOption('high', '高 (high)'),
     ];
   }
-  return const [
-    ReasoningOption('default', '默认 (default)'),
-    ReasoningOption('low', '低 (low)'),
-    ReasoningOption('medium', '中 (medium)'),
-    ReasoningOption('high', '高 (high)'),
+  return [
+    const ReasoningOption('default', '默认 (default)'),
+    const ReasoningOption('low', '低 (low)'),
+    const ReasoningOption('medium', '中 (medium)'),
+    const ReasoningOption('high', '高 (high)'),
+    if (vendor == ReasoningVendor.deepSeek)
+      const ReasoningOption('max', '最大 (max)'),
   ];
-}
-
-/// Whether the selected model accepts an explicit reasoning effort field.
-/// DeepSeek's reasoner is always in reasoning mode and rejects the
-/// OpenAI-compatible `reasoning_effort` parameter, so its UI choices remain
-/// available for compatibility while requests omit that field.
-bool acceptsReasoningParameter(String model) {
-  final vendor = reasoningVendorForModel(model);
-  if (vendor == ReasoningVendor.deepSeek) return false;
-  return vendor != ReasoningVendor.unknown;
 }
 
 String reasoningLabel(String model, String id) =>
     reasoningOptionsForModel(model)
         .firstWhere(
           (option) => option.id == id,
-          orElse: () => reasoningOptionsForModel(model).first,
+          orElse: () => ReasoningOption(id, '自定义 ($id)'),
         )
         .label;
 
@@ -134,22 +126,17 @@ Map<String, dynamic> applyReasoning(
   String model,
   String intensity,
 ) {
-  if (intensity.trim().isEmpty || intensity == 'default') {
+  intensity = intensity.trim();
+  if (intensity.isEmpty || intensity == 'default') {
     return body;
   }
   final vendor = reasoningVendorForModel(model);
-  if (vendor == ReasoningVendor.unknown) {
-    // Unknown relay model: allow the operator to provide the provider's
-    // documented reasoning_effort value without guessing its enum.
-    body['reasoning_effort'] = intensity.trim();
+  if (vendor == ReasoningVendor.unknown || _budgetFor(intensity) == 0) {
+    // Relay models may expose additional effort values. Explicit custom
+    // values use reasoning_effort; known budgets keep the vendor format.
+    body['reasoning_effort'] = intensity;
     return body;
   }
-  if (!reasoningOptionsForModel(
-    model,
-  ).any((option) => option.id == intensity)) {
-    return body;
-  }
-  if (!acceptsReasoningParameter(model)) return body;
   switch (vendor) {
     case ReasoningVendor.claude:
       body['thinking'] = {

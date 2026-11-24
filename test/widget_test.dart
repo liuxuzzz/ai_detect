@@ -157,6 +157,180 @@ HttpExchange _exchange({
 );
 
 void main() {
+  testWidgets('DeepSeek max and custom effort persist and reach the upstream', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(1440, 900));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    const deepseek = Upstream(
+      id: 'deepseek',
+      baseUrl: 'https://example.com/v1',
+      apiKey: 'key',
+      name: 'DeepSeek channel',
+      models: ['deepseek-reasoner'],
+      selectedModel: 'deepseek-reasoner',
+    );
+    final db = _MemoryDb(configured: true, extraUpstreams: [deepseek]);
+    db.settings['detection_mode'] = 'single';
+    final requests = <Map<String, dynamic>>[];
+    final service = DiagnosticsService(
+      client: _TestClient((request) async {
+        requests.add(
+          jsonDecode((request as http.Request).body) as Map<String, dynamic>,
+        );
+        return http.StreamedResponse(
+          Stream.value(utf8.encode('data: [DONE]\n\n')),
+          200,
+        );
+      }),
+    );
+    addTearDown(service.close);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: HarnessHome(database: db, diagnostics: service),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('DeepSeek channel'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('选择推理强度'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('最大 (max)'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('开始 AI 检测'));
+    await tester.runAsync(() => Future<void>.delayed(Duration.zero));
+    await tester.pumpAndSettle();
+    expect(requests.single['reasoning_effort'], 'max');
+    await tester.tap(find.byTooltip('选择推理强度'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('自定义…'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextFormField), 'vendor-deep');
+    await tester.tap(find.text('保存'));
+    await tester.pumpAndSettle();
+    expect(db.settings['reasoning:deepseek:deepseek-reasoner'], 'vendor-deep');
+    await tester.tap(find.text('test').first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('DeepSeek channel').first);
+    await tester.pumpAndSettle();
+    expect(find.text('自定义 (vendor-deep)'), findsOneWidget);
+    await tester.tap(find.text('开始 AI 检测'));
+    await tester.runAsync(() => Future<void>.delayed(Duration.zero));
+    await tester.pumpAndSettle();
+    expect(requests.last['reasoning_effort'], 'vendor-deep');
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+    'running channel can browse history without streaming overwriting it',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(1440, 900));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final db = _MemoryDb(
+        configured: true,
+        records: [
+          _record('old', exchanges: [_exchange()]),
+        ],
+      );
+      db.settings['detection_mode'] = 'single';
+      final body = StreamController<List<int>>();
+      final service = DiagnosticsService(
+        client: _TestClient(
+          (_) async => http.StreamedResponse(body.stream, 200),
+        ),
+      );
+      addTearDown(service.close);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: HarnessHome(database: db, diagnostics: service),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('开始 AI 检测'));
+      await tester.pump();
+      await tester.tap(find.text('test').first);
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('history-old')));
+      await tester.pumpAndSettle();
+      expect(find.text('历史输出-old\n'), findsOneWidget);
+      expect(find.text('停止检测'), findsOneWidget);
+      body.add(
+        utf8.encode('data: {"choices":[{"delta":{"content":"后台输出"}}]}\n\n'),
+      );
+      await tester.pump(const Duration(seconds: 2));
+      await tester.pumpAndSettle();
+      expect(find.text('历史输出-old\n'), findsOneWidget);
+      await tester.tap(find.text('诊断详情'));
+      await tester.pumpAndSettle();
+      expect(
+        find.text('{"messages":[{"role":"user","content":"历史问题"}]}'),
+        findsOneWidget,
+      );
+      await tester.tap(find.text('返回当前测试'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('实时输出'));
+      await tester.pumpAndSettle();
+      expect(find.text('后台输出'), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('history-old')));
+      await tester.pumpAndSettle();
+      body.add(utf8.encode('data: [DONE]\n\n'));
+      await tester.runAsync(() => body.close());
+      await tester.pumpAndSettle();
+      expect(db.saved.single.output, '后台输出');
+      expect(find.text('历史输出-old\n'), findsOneWidget);
+      await tester.tap(find.text('返回最近测试'));
+      await tester.pumpAndSettle();
+      expect(find.text('后台输出'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets('each channel retains its history and selected workspace tab', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(1440, 900));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    const second = Upstream(
+      id: 'u2',
+      name: 'second-channel',
+      baseUrl: 'https://example.com/v1',
+      apiKey: 'key',
+      models: ['model'],
+      selectedModel: 'model',
+    );
+    final db = _MemoryDb(
+      configured: true,
+      extraUpstreams: [second],
+      records: [
+        _record('a'),
+        _record('b', upstream: 'u2'),
+      ],
+    );
+    await tester.pumpWidget(MaterialApp(home: HarnessHome(database: db)));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('test').first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('history-a')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('检测指标'));
+    await tester.pumpAndSettle();
+    expect(find.text('30 token'), findsOneWidget);
+    await tester.tap(find.text('second-channel').first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('history-b')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('诊断详情'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('test').first);
+    await tester.pumpAndSettle();
+    expect(find.text('30 token'), findsOneWidget);
+    expect(find.text('历史输出-a\n'), findsNothing);
+    await tester.tap(find.text('second-channel').first);
+    await tester.pumpAndSettle();
+    expect(find.text('无原始请求记录'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets(
     'Agent artifact stays rendered during streaming, completion and history',
     (tester) async {
