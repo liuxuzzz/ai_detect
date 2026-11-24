@@ -22,6 +22,12 @@ AI质量检测包含桌面客户端和云端服务两部分。
 | --- | --- |
 | ![上传限制设置](docs/screenshots/cloud-upload-settings.jpg) | ![注册开关](docs/screenshots/cloud-registration-settings.jpg) |
 
+桌面客户端包含检测工作区和渠道管理，支持本地测试、实时输出、指标曲线、故障诊断和报告上传。
+
+| 检测工作区 | 添加渠道 |
+| --- | --- |
+| ![桌面端检测工作区](docs/screenshots/desktop-main.jpg) | ![桌面端添加渠道](docs/screenshots/desktop-channel-editor.jpg) |
+
 ## 快速使用
 
 ### 使用桌面客户端
