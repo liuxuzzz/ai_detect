@@ -220,6 +220,7 @@ class _ModelOutputViewState extends State<ModelOutputView> {
   Widget build(BuildContext context) {
     final activities = widget.activities;
     final hasOutput = activities.any((a) => a.kind == 'output');
+    final hasThinking = activities.any((a) => a.kind == 'thinking');
     final hasArtifact = activities.any((a) => a.kind == 'html_artifact');
     final activityOutput = activities
         .where((a) => a.kind == 'output')
@@ -228,14 +229,27 @@ class _ModelOutputViewState extends State<ModelOutputView> {
     return ListView(
       controller: scroll,
       children: [
+        if (hasThinking && !hasOutput && !hasArtifact && widget.output.isEmpty)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: Text(widget.receiving ? '正在思考，尚未收到正文' : '本次仅收到思考过程，未收到正文'),
+          ),
         for (var i = 0; i < activities.length; i++)
-          if (activities[i].kind == 'output')
+          if (activities[i].kind == 'output') ...[
+            if (hasThinking && (i == 0 || activities[i - 1].kind != 'output'))
+              const Padding(
+                padding: EdgeInsets.only(bottom: 8),
+                child: Text(
+                  '正文',
+                  style: TextStyle(fontWeight: FontWeight.w600),
+                ),
+              ),
             ...outputWidgets(
               activities[i].content,
               'activity-$i',
               widget.receiving && i == activities.length - 1,
-            )
-          else if (activities[i].kind == 'html_artifact')
+            ),
+          ] else if (activities[i].kind == 'html_artifact')
             _HtmlBlock(
               key: ValueKey('artifact-${activities[i].id}'),
               source: activities[i].content,
@@ -263,7 +277,7 @@ class _ModelOutputViewState extends State<ModelOutputView> {
                   ),
                   title: Text(
                     activities[i].kind == 'thinking'
-                        ? 'Thinking'
+                        ? '思考过程'
                         : '${activities[i].kind == 'tool_result' ? '工具结果' : '工具调用'}${activities[i].name.isEmpty ? '' : ' · ${activities[i].name}'}',
                     style: const TextStyle(
                       fontWeight: FontWeight.w600,

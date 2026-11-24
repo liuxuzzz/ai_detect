@@ -5,6 +5,61 @@ import 'package:flutter_html/flutter_html.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  testWidgets(
+    'thinking-only response shows missing answer and keeps HTML in thoughts as text',
+    (tester) async {
+      Future<void> show(bool receiving) => tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: ModelOutputView(
+              output: '',
+              receiving: receiving,
+              autoPreviewHtml: true,
+              activities: const [
+                ModelActivity(
+                  kind: 'thinking',
+                  content: '<html><body>思考中的草稿</body></html>',
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+      await show(true);
+      await tester.pumpAndSettle();
+      expect(find.text('正在思考，尚未收到正文'), findsOneWidget);
+      expect(find.text('思考过程'), findsOneWidget);
+      expect(find.byType(HtmlPagePreview), findsNothing);
+      await show(false);
+      await tester.pumpAndSettle();
+      expect(find.text('本次仅收到思考过程，未收到正文'), findsOneWidget);
+      expect(find.text('<html><body>思考中的草稿</body></html>'), findsOneWidget);
+      expect(find.byType(HtmlPagePreview), findsNothing);
+    },
+  );
+
+  testWidgets('thinking and final answer have separate labels', (tester) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: ModelOutputView(
+            output: '这是正文',
+            activities: [
+              ModelActivity(kind: 'thinking', content: '这是思考'),
+              ModelActivity(kind: 'output', content: '这是正文'),
+            ],
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('思考过程'), findsOneWidget);
+    expect(find.text('正文'), findsOneWidget);
+    expect(find.text('这是思考'), findsOneWidget);
+    expect(find.text('这是正文'), findsOneWidget);
+    expect(find.text('本次仅收到思考过程，未收到正文'), findsNothing);
+  });
+
   for (final output in [
     '只会输出普通文本，答案是 42。\n1 < 2。',
     '说明\n```html\n<div>第一个</div>\n```\n中间文字\n```html\n<p>第二个</p>\n```\n结束',

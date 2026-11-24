@@ -157,6 +157,67 @@ HttpExchange _exchange({
 );
 
 void main() {
+  testWidgets(
+    'thinking-only truncated run stores actual token usage and an error without retrying',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(1120, 720));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final db = _MemoryDb(configured: true);
+      db.settings['detection_mode'] = 'single';
+      var requests = 0;
+      final service = DiagnosticsService(
+        client: _TestClient((_) async {
+          requests++;
+          return http.StreamedResponse(
+            Stream.value(
+              utf8.encode(
+                'data: {"choices":[{"delta":{"content":"","reasoning_content":"思考中的草稿代码"}}]}\n\n'
+                'data: {"choices":[{"delta":{"content":"","reasoning_content":null},"finish_reason":"length"}],"usage":{"prompt_tokens":603,"completion_tokens":65536,"total_tokens":66139,"completion_tokens_details":{"reasoning_tokens":65536}}}\n\n'
+                'data: [DONE]\n\n',
+              ),
+            ),
+            200,
+          );
+        }),
+      );
+      addTearDown(service.close);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: HarnessHome(database: db, diagnostics: service),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('开始 AI 检测'));
+      await tester.runAsync(() => Future<void>.delayed(Duration.zero));
+      await tester.pumpAndSettle();
+      final saved = db.saved.single;
+      expect(requests, 1);
+      expect(saved.output, isEmpty);
+      expect(saved.error, contains('finish_reason=length'));
+      expect(saved.inputTokens, 603);
+      expect(saved.outputTokens, 65536);
+      expect(saved.totalTokens, 66139);
+      expect(find.text('本次仅收到思考过程，未收到正文'), findsOneWidget);
+      expect(
+        tester.widget<Text>(find.byKey(const ValueKey('output-error'))).data,
+        contains('已达到输出 token 上限'),
+      );
+      expect(find.text('检测完成（含错误）'), findsOneWidget);
+      await tester.tap(find.text('test').first);
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(ValueKey('history-${saved.id}')));
+      await tester.pumpAndSettle();
+      expect(
+        tester.widget<Text>(find.byKey(const ValueKey('output-error'))).data,
+        contains('已达到输出 token 上限'),
+      );
+      await tester.tap(find.text('检测指标'));
+      await tester.pumpAndSettle();
+      expect(find.text('65,536 token'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   testWidgets('DeepSeek max and custom effort persist and reach the upstream', (
     tester,
   ) async {
@@ -1012,7 +1073,7 @@ void main() {
       );
       emit({'reasoning_content': '推理开始'});
       await tester.pump(const Duration(milliseconds: 110));
-      expect(find.text('Thinking'), findsOneWidget);
+      expect(find.text('思考过程'), findsOneWidget);
       expect(find.text('推理开始'), findsOneWidget);
       await tester.pump(const Duration(seconds: 1));
       await tester.pump(const Duration(seconds: 1));

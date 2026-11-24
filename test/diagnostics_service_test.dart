@@ -26,7 +26,203 @@ const upstream = Upstream(
 );
 const prompt = TestPrompt(id: 'p', name: 'test', content: '  原样提示词\n');
 
+http.StreamedResponse _deepSeekResponse({
+  String content = '',
+  String finishReason = 'stop',
+  List<Map<String, dynamic>>? toolCalls,
+}) {
+  final events = [
+    {
+      'choices': [
+        {
+          'delta': {
+            'role': 'assistant',
+            'content': '',
+            'reasoning_content': '',
+          },
+        },
+      ],
+    },
+    {
+      'choices': [
+        {
+          'delta': {
+            'content': '',
+            'reasoning_content': '先规划代码 <div>思考中的片段</div>',
+          },
+        },
+      ],
+    },
+    if (content.isNotEmpty || toolCalls != null)
+      {
+        'choices': [
+          {
+            'delta': {
+              'content': content,
+              'reasoning_content': null,
+              'tool_calls': ?toolCalls,
+            },
+          },
+        ],
+      },
+    {
+      'choices': [
+        {
+          'delta': {'content': '', 'reasoning_content': null},
+          'finish_reason': finishReason,
+        },
+      ],
+    },
+    // Usage may arrive after finish_reason and must still be collected.
+    {
+      'choices': [],
+      'usage': {
+        'prompt_tokens': 603,
+        'completion_tokens': 65536,
+        'total_tokens': 66139,
+        'completion_tokens_details': {'reasoning_tokens': 65536},
+        'prompt_cache_hit_tokens': 0,
+      },
+    },
+  ];
+  final bytes = utf8.encode(
+    '${events.map((event) => 'data: ${jsonEncode(event)}\n\n').join()}data: [DONE]\n\n',
+  );
+  return http.StreamedResponse(
+    Stream.fromIterable([
+      for (var i = 0; i < bytes.length; i += 7)
+        bytes.sublist(i, (i + 7).clamp(0, bytes.length)),
+    ]),
+    200,
+    headers: {'content-type': 'text/event-stream'},
+  );
+}
+
 void main() {
+  test(
+    'DeepSeek reasoning stays separate from completed answer across byte fragments',
+    () async {
+      final thoughts = <ModelActivity>[];
+      final text = <String>[];
+      final service = DiagnosticsService(
+        client: _ScriptedClient(
+          (_) async => _deepSeekResponse(content: '这是正文'),
+        ),
+      );
+      addTearDown(service.close);
+      final result = await service.stream(
+        upstream: upstream.copyWith(selectedModel: 'deepseek-flash'),
+        prompt: prompt,
+        onTcpConnected: (_) {},
+        onText: text.add,
+        onActivity: thoughts.add,
+      );
+      expect(result.output, '这是正文');
+      expect(text, ['这是正文']);
+      expect(thoughts.single.kind, 'thinking');
+      expect(thoughts.single.content, '先规划代码 <div>思考中的片段</div>');
+      expect(result.finishReason, 'stop');
+      expect(result.error, isEmpty);
+    },
+  );
+
+  test(
+    'DeepSeek thinking-only token limit preserves usage and reports truncation',
+    () async {
+      final traces = <HttpExchange>[];
+      final thoughts = <ModelActivity>[];
+      final service = DiagnosticsService(
+        client: _ScriptedClient(
+          (_) async => _deepSeekResponse(finishReason: 'length'),
+        ),
+      );
+      addTearDown(service.close);
+      final result = await service.stream(
+        upstream: upstream.copyWith(selectedModel: 'deepseek-flash'),
+        prompt: prompt,
+        onTcpConnected: (_) {},
+        onText: (_) => fail('No answer was emitted'),
+        onActivity: thoughts.add,
+        onExchange: traces.add,
+      );
+      expect(result.output, isEmpty);
+      expect(thoughts.single.kind, 'thinking');
+      expect(result.error, contains('未生成正文'));
+      expect(result.inputTokens, 603);
+      expect(result.outputTokens, 65536);
+      expect(result.totalTokens, 66139);
+      expect(result.cacheReadTokens, 0);
+      expect(traces.last.statusCode, 200);
+      expect(traces.last.error, contains('finish_reason=length'));
+      expect(traces.last.responseBody, contains('[DONE]'));
+    },
+  );
+
+  test(
+    'Agent keeps incomplete output and usage without executing interrupted tool calls',
+    () async {
+      final root = await Directory.systemTemp.createTemp(
+        'aijiance-incomplete-test-',
+      );
+      addTearDown(() => root.delete(recursive: true));
+      var requests = 0;
+      final service = DiagnosticsService(
+        client: _ScriptedClient((_) async {
+          requests++;
+          return _deepSeekResponse(
+            content: '未完成的正文',
+            finishReason: 'length',
+            toolCalls: [
+              {
+                'index': 0,
+                'id': 'call-1',
+                'type': 'function',
+                'function': {
+                  'name': 'write_html_file',
+                  'arguments': jsonEncode({
+                    'path': 'result.html',
+                    'content': '<h1>未完成</h1>',
+                  }),
+                },
+              },
+            ],
+          );
+        }),
+      );
+      addTearDown(service.close);
+      final result = await service.agent(
+        upstream: upstream.copyWith(selectedModel: 'deepseek-flash'),
+        prompt: prompt,
+        runtime: AgentToolRuntime(root),
+        onTcpConnected: (_) {},
+        onText: (_) {},
+      );
+      expect(requests, 1);
+      expect(result.output, '未完成的正文');
+      expect(result.error, contains('正文不完整'));
+      expect(result.outputTokens, 65536);
+      expect(await File('${root.path}/result.html').exists(), isFalse);
+    },
+  );
+
+  for (final reason in ['content_filter', 'insufficient_system_resource']) {
+    test('recognizes interrupted completion: $reason', () async {
+      final service = DiagnosticsService(
+        client: _ScriptedClient(
+          (_) async => _deepSeekResponse(finishReason: reason),
+        ),
+      );
+      addTearDown(service.close);
+      final result = await service.stream(
+        upstream: upstream,
+        prompt: prompt,
+        onTcpConnected: (_) {},
+        onText: (_) {},
+      );
+      expect(result.error, contains(reason));
+    });
+  }
+
   test(
     'sends the selected prompt verbatim as a stream and parses usage',
     () async {

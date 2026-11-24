@@ -423,6 +423,7 @@ class _HarnessHomeState extends State<HarnessHome> {
     int? totalTokens;
     final retries = <RetryEvent>[];
     String error = '';
+    bool receivedResult = false;
     final tokensBySecond = <int, int>{};
     final recentTokens = Queue<(int, int)>();
     void sample({bool updateCurve = true}) {
@@ -604,6 +605,7 @@ class _HarnessHomeState extends State<HarnessHome> {
                 reasoningEffort: runReasoningEffort,
               );
         cancellation.throwIfCancelled();
+        receivedResult = true;
         run.output = outputBuffer.toString();
         inputTokens =
             result.inputTokens ?? (prompt.content.length / 3.5).ceil();
@@ -611,7 +613,18 @@ class _HarnessHomeState extends State<HarnessHome> {
         totalTokens = result.totalTokens;
         cacheRead = result.cacheReadTokens;
         cacheWrite = result.cacheWriteTokens;
-        error = '';
+        error = result.error;
+        if (error.isNotEmpty) {
+          retries.add(
+            RetryEvent(
+              DateTime.now(),
+              error,
+              attempt,
+              elapsedMs: watch.elapsedMilliseconds,
+            ),
+          );
+          run.retries = List.of(retries);
+        }
         break;
       } on DiagnosticCancelled {
         error = '用户已停止';
@@ -644,7 +657,7 @@ class _HarnessHomeState extends State<HarnessHome> {
         }
       }
     }
-    if (error.isNotEmpty) {
+    if (error.isNotEmpty && !receivedResult) {
       inputTokens = (prompt.content.length / 3.5).ceil();
       outputTokens = run.tokens;
     }
@@ -1437,6 +1450,16 @@ class _HarnessHomeState extends State<HarnessHome> {
           ],
         ),
         const SizedBox(height: 16),
+        if (last?.error.isNotEmpty == true) ...[
+          Text(
+            last!.error,
+            key: const ValueKey('output-error'),
+            maxLines: 3,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(color: red),
+          ),
+          const SizedBox(height: 12),
+        ],
         Expanded(
           child: ValueListenableBuilder<int>(
             valueListenable: outputRevision,

@@ -131,6 +131,7 @@ class StreamResult {
     this.cacheWriteTokens,
     this.toolCalls = const [],
     this.responseOutput = const [],
+    this.finishReason,
   });
 
   final String output;
@@ -141,6 +142,16 @@ class StreamResult {
   final int? cacheWriteTokens;
   final List<AgentToolCall> toolCalls;
   final List<Map<String, dynamic>> responseOutput;
+  final String? finishReason;
+
+  String get error => switch (finishReason) {
+    'length' =>
+      '输出被上游截断（finish_reason=length）：已达到输出 token 上限${output.isEmpty ? '，未生成正文' : '，正文不完整'}。',
+    'content_filter' => '输出被上游内容过滤中断（finish_reason=content_filter）。',
+    'insufficient_system_resource' =>
+      '上游资源不足，输出已中断（finish_reason=insufficient_system_resource）。',
+    _ => '',
+  };
 }
 
 class ProbeResult {
@@ -477,6 +488,7 @@ class DiagnosticsService {
       }
 
       final output = StringBuffer();
+      String? finishReason;
       int? inputTokens;
       int? outputTokens;
       int? totalTokens;
@@ -541,7 +553,11 @@ class DiagnosticsService {
         }
         final choices = event['choices'];
         if (choices is List && choices.isNotEmpty && choices.first is Map) {
-          final delta = (choices.first as Map)['delta'];
+          final choice = choices.first as Map;
+          if (choice['finish_reason'] case final String reason) {
+            finishReason = reason;
+          }
+          final delta = choice['delta'];
           if (delta is Map) _activities(delta, onActivity);
           if (delta is Map && delta['tool_calls'] is List) {
             for (final raw in (delta['tool_calls'] as List).whereType<Map>()) {
@@ -604,7 +620,8 @@ class DiagnosticsService {
       if (api == ModelApi.responses && !responses.completed) {
         throw const FormatException('上游 Responses 流提前结束，未收到完成事件');
       }
-      return StreamResult(
+      final result = StreamResult(
+        finishReason: finishReason,
         output: api == ModelApi.responses
             ? responses.output
             : output.toString(),
@@ -629,6 +646,10 @@ class DiagnosticsService {
                   ),
               ],
       );
+      // A 200 response can still end without a complete answer. Keep usage and
+      // partial output while marking the model's termination in the trace.
+      capture.finish(result.error.isEmpty ? null : result.error);
+      return result;
     } catch (e) {
       capture?.finish(deadline.expired ? deadline.error : e);
       if (deadline.expired) throw deadline.error;
@@ -697,8 +718,9 @@ class DiagnosticsService {
             ((result.inputTokens ?? 0) + (result.outputTokens ?? 0));
         cacheRead = _sumKnown(cacheRead, result.cacheReadTokens);
         cacheWrite = _sumKnown(cacheWrite, result.cacheWriteTokens);
-        if (result.toolCalls.isEmpty) {
+        if (result.error.isNotEmpty || result.toolCalls.isEmpty) {
           return StreamResult(
+            finishReason: result.finishReason,
             output: output.toString(),
             inputTokens: inputTokens == 0 ? null : inputTokens,
             outputTokens: outputTokens == 0 ? null : outputTokens,
