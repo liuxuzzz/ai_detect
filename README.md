@@ -36,6 +36,8 @@ AI质量检测包含桌面客户端和云端服务两部分。
 
 安装对应平台的安装包，启动后在渠道管理中添加上游地址、API Key 和模型，然后选择提示词并开始测试。
 
+Windows 的 HTML 页面和动画使用 Microsoft Edge WebView2 渲染，支持 JavaScript、Canvas、SVG 和 CSS 动画。安装版会在缺少 WebView2 时补装运行库；便携版可点击预览区的「安装 WebView2」，安装后点击「安装后重试」。首次补装运行库需要联网，之后可本地预览报告。
+
 客户端默认把数据保存在本机。云端地址和 Client Key 都是可选的：不填写时，客户端只使用本地 DuckDB，完全离线运行；需要上传和分享报告时，再打开「全局设置」，将云端地址填写为浏览器实际打开的站点地址，例如：
 
 ```text
@@ -167,6 +169,12 @@ flutter run -d macos
 ```
 
 客户端的本地数据库代码主要位于 `lib/db.dart`、`lib/duckdb_store.dart` 和 `lib/data.dart`；上游请求与流式测量位于 `lib/diagnostics_service.dart`、`lib/upstream_http.dart` 和 `lib/responses_stream.dart`；云端上传位于 `lib/cloud_client.dart`。
+
+Windows 原生网页预览验证（需要 Windows 10 1809+、WebView2 运行库及 Windows 11 SDK）：
+
+```powershell
+flutter test integration_test/windows_html_preview_test.dart -d windows --release
+```
 
 ### 云端前端开发
 

@@ -49,7 +49,7 @@ jobs:
       - run: flutter pub get --enforce-lockfile
       - run: python3 -m unittest discover -s tool -p 'test_*.py'
       - run: python3 tool/bootstrap_duckdb.py
-      - run: dart format --output=none --set-exit-if-changed lib test tool
+      - run: dart format --output=none --set-exit-if-changed lib test tool integration_test
       - run: flutter analyze --no-pub
       - run: flutter test --no-pub
 
@@ -84,6 +84,12 @@ jobs:
       - run: flutter pub get --enforce-lockfile
       - name: Prepare checksum-verified DuckDB native library
         run: python tool/bootstrap_duckdb.py
+      - name: Verify Windows HTML and animation in WebView2
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          ./tool/prepare_webview2.ps1 -Install
+          flutter test integration_test/windows_html_preview_test.dart -d windows --release
       - name: Build desktop release
         shell: bash
         run: flutter build ${{ matrix.platform }} --release --no-pub --build-name="$APP_VERSION"
@@ -102,8 +108,15 @@ jobs:
             if ($LASTEXITCODE -ne 0) { throw 'Inno Setup installation failed' }
           }
       - name: Package installers, portable bundles and checksums
+        if: runner.os != 'Windows'
         shell: bash
         run: python tool/package_desktop.py --version "$APP_VERSION"
+      - name: Prepare WebView2 and package Windows installers
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          ./tool/prepare_webview2.ps1
+          python tool/package_desktop.py --version "$env:APP_VERSION"
       - name: Verify macOS universal bundle
         if: runner.os == 'macOS'
         run: |

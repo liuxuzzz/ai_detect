@@ -29,4 +29,19 @@ Name: "{autodesktop}\AI质量检测"; Filename: "{app}\aijiance.exe"; Tasks: des
 Name: "desktopicon"; Description: "创建桌面快捷方式"; Flags: unchecked
 
 [Run]
+Filename: "{app}\MicrosoftEdgeWebview2Setup.exe"; Parameters: "/silent /install"; StatusMsg: "正在安装 HTML 动画预览所需的 WebView2 运行库…"; Check: NeedsWebView2; Flags: waituntilterminated
 Filename: "{app}\aijiance.exe"; Description: "启动 AI质量检测"; Flags: nowait postinstall skipifsilent
+
+[Code]
+function NeedsWebView2: Boolean;
+var
+  Version: String;
+  RuntimeKey: String;
+begin
+  RuntimeKey := 'Software\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}';
+  Result := True;
+  if RegQueryStringValue(HKLM32, RuntimeKey, 'pv', Version) then
+    if (Version <> '') and (Version <> '0.0.0.0') then Result := False;
+  if RegQueryStringValue(HKCU, RuntimeKey, 'pv', Version) then
+    if (Version <> '') and (Version <> '0.0.0.0') then Result := False;
+end;

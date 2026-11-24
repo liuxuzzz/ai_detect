@@ -41,6 +41,8 @@ def windows(version):
     bundle = ROOT / "build/windows/x64/runner/Release"
     if not (bundle / "aijiance.exe").is_file() or not (bundle / "duckdb.dll").is_file():
         raise SystemExit("Build the complete Windows release with DuckDB first")
+    if not (bundle / "MicrosoftEdgeWebview2Setup.exe").is_file():
+        raise SystemExit("Run tool/prepare_webview2.ps1 to bundle the WebView2 installer first")
     iscc = shutil.which("ISCC") or str(Path(r"C:\Program Files (x86)\Inno Setup 6\ISCC.exe"))
     run(iscc, f"/DAppVersion={version}", f"/DBundleDir={bundle}", f"/DOutputDir={OUTPUT}", ROOT / "packaging/windows.iss")
     shutil.make_archive(str(OUTPUT / f"ai-detect-{version}-windows-x64-portable"), "zip", bundle)

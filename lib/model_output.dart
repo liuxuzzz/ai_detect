@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_html/flutter_html.dart';
 import 'data.dart';
 import 'formatters.dart';
+import 'windows_html_preview.dart';
 
 class OutputPart {
   const OutputPart(this.offset, this.text, {this.html});
@@ -388,7 +389,7 @@ class _HtmlBlockState extends State<_HtmlBlock> {
   );
 }
 
-/// macOS uses WebKit to preserve the model's HTML, CSS, and JavaScript.
+/// Uses native browser engines on Windows and macOS for HTML and animation.
 class HtmlPagePreview extends StatefulWidget {
   const HtmlPagePreview({super.key, required this.source});
 
@@ -445,6 +446,9 @@ class _HtmlPagePreviewState extends State<HtmlPagePreview> {
 
   @override
   Widget build(BuildContext context) {
+    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.windows) {
+      return WindowsHtmlPreview(source: widget.source);
+    }
     if (defaultTargetPlatform != TargetPlatform.macOS || kIsWeb) {
       return Html(data: _previewSource(widget.source));
     }
