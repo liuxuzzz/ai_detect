@@ -10,6 +10,8 @@ AI质量检测包含桌面客户端和云端服务两部分。
 
 当前版本为 **v0.1.1**。项目地址：[ai_detect](https://github.com/liuxuzzz/ai_detect)，安装包可在 [GitHub Releases](https://github.com/liuxuzzz/ai_detect/releases) 下载。
 
+云端 Demo：[https://ai_detect.wv.gs/](https://ai_detect.wv.gs/)。可以直接在浏览器中注册和使用，也可以将这个地址填写到客户端，用于上传和分享测试报告。
+
 ## 界面预览
 
 以下截图展示云端的登录、上传限制、站点地址和注册设置。截图中的账号、域名和数据均为示例内容。
