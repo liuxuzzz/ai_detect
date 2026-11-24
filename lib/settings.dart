@@ -160,9 +160,9 @@ class _SettingsDialogState extends State<SettingsDialog> {
                   controller: cloudUrl,
                   enabled: !busy,
                   decoration: const InputDecoration(
-                    labelText: '云端地址',
+                    labelText: '云端地址（可选）',
                     hintText: 'http://127.0.0.1:6600',
-                    helperText: '填写浏览器中打开的站点地址，支持 IP:端口或 HTTPS 域名',
+                    helperText: '留空即可离线使用；需要分享报告时填写浏览器中打开的站点地址',
                   ),
                   keyboardType: TextInputType.url,
                 ),
@@ -171,7 +171,7 @@ class _SettingsDialogState extends State<SettingsDialog> {
                   controller: cloudKey,
                   enabled: !busy,
                   decoration: const InputDecoration(
-                    labelText: '云端 Client Key',
+                    labelText: '云端 Client Key（可选）',
                     hintText: '从分享站「个人中心」创建并复制 API Key（Client Key）',
                   ),
                   obscureText: true,
@@ -180,7 +180,7 @@ class _SettingsDialogState extends State<SettingsDialog> {
                 ),
                 const SizedBox(height: 8),
                 const Text(
-                  '需要云端分享时，可在 $cloudShareUrl 注册，并在个人中心创建 API Key（Client Key），填写浏览器中打开的站点地址；也可自建评测分享站。配置后可上传检测数据并分享报告。本地检测支持离线使用。',
+                  '云端地址和 Client Key 都是可选的。不配置时客户端只保存在本地并支持离线使用；需要分享报告时，可在 $cloudShareUrl 注册，在个人中心创建 Client Key，并填写浏览器中打开的站点地址；也可自建评测分享站。',
                   style: TextStyle(fontSize: 12, color: Colors.grey),
                 ),
                 Align(
