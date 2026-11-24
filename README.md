@@ -173,7 +173,7 @@ flutter run -d macos
 Windows 原生网页预览验证（需要 Windows 10 1809+、WebView2 运行库及 Windows 11 SDK）：
 
 ```powershell
-flutter test integration_test/windows_html_preview_test.dart -d windows --release
+flutter test integration_test/windows_html_preview_test.dart -d windows
 ```
 
 ### 云端前端开发

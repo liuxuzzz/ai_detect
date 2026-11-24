@@ -89,7 +89,7 @@ jobs:
         shell: pwsh
         run: |
           ./tool/prepare_webview2.ps1 -Install
-          flutter test integration_test/windows_html_preview_test.dart -d windows --release
+          flutter test integration_test/windows_html_preview_test.dart -d windows
       - name: Build desktop release
         shell: bash
         run: flutter build ${{ matrix.platform }} --release --no-pub --build-name="$APP_VERSION"
