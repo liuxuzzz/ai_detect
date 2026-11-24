@@ -1475,11 +1475,7 @@ class _HarnessHomeState extends State<HarnessHome> {
                       output: liveOutput,
                       activities: liveActivities,
                       receiving: running,
-                      autoPreviewHtml:
-                          (running
-                              ? activeRuns[selected?.id]?.detectionMode
-                              : last?.detectionMode ?? detectionMode) ==
-                          'agent',
+                      autoPreviewHtml: true,
                     );
             },
           ),

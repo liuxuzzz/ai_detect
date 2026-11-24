@@ -158,6 +158,95 @@ HttpExchange _exchange({
 
 void main() {
   testWidgets(
+    'GPT single-mode HTML renders after reasoning and remains available in history',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(1440, 1000));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      const html =
+          '<!doctype html><html><body><h1>GPT 页面</h1><script>document.title = "demo";</script></body></html>';
+      final gpt = Upstream(
+        id: 'gpt',
+        name: 'GPT channel',
+        baseUrl: _upstream.baseUrl,
+        apiKey: 'key',
+        models: const ['gpt-6.2-sol'],
+        selectedModel: 'gpt-6.2-sol',
+      );
+      final db = _MemoryDb(configured: true, extraUpstreams: [gpt]);
+      db.settings['detection_mode'] = 'single';
+      final service = DiagnosticsService(
+        client: _TestClient((request) async {
+          expect(request.url.path, '/v1/responses');
+          final events = [
+            {
+              'type': 'response.reasoning_summary_text.delta',
+              'output_index': 0,
+              'summary_index': 0,
+              'delta': '先规划页面',
+            },
+            {
+              'type': 'response.output_text.delta',
+              'output_index': 1,
+              'content_index': 0,
+              'delta': '```html\n${html.substring(0, 40)}',
+            },
+            {
+              'type': 'response.output_text.delta',
+              'output_index': 1,
+              'content_index': 0,
+              'delta': '${html.substring(40)}\n```',
+            },
+            {
+              'type': 'response.completed',
+              'response': {'status': 'completed', 'output': []},
+            },
+          ];
+          return http.StreamedResponse(
+            Stream.value(
+              utf8.encode(
+                events.map((e) => 'data: ${jsonEncode(e)}\n\n').join(),
+              ),
+            ),
+            200,
+          );
+        }),
+      );
+      addTearDown(service.close);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: HarnessHome(database: db, diagnostics: service),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('GPT channel'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('开始 AI 检测'));
+      await tester.runAsync(() => Future<void>.delayed(Duration.zero));
+      await tester.pumpAndSettle();
+      expect(db.saved.single.error, isEmpty);
+      expect(find.byType(HtmlPagePreview), findsOneWidget);
+      expect(
+        tester.widget<HtmlPagePreview>(find.byType(HtmlPagePreview)).source,
+        '$html\n',
+      );
+      await tester.tap(find.text('源代码'));
+      await tester.pumpAndSettle();
+      expect(find.text('$html\n'), findsOneWidget);
+      await tester.tap(find.text('渲染预览'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('检测指标'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('实时输出'));
+      await tester.pumpAndSettle();
+      expect(find.byType(HtmlPagePreview), findsOneWidget);
+      await tester.tap(find.byKey(ValueKey('history-${db.saved.single.id}')));
+      await tester.pumpAndSettle();
+      expect(find.byType(HtmlPagePreview), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
     'thinking-only truncated run stores actual token usage and an error without retrying',
     (tester) async {
       await tester.binding.setSurfaceSize(const Size(1120, 720));
@@ -653,7 +742,7 @@ void main() {
         tester.getTopLeft(export).dx,
         greaterThan(tester.getTopLeft(find.text('模型输出')).dx),
       );
-      await tester.tap(find.text('HTML'));
+      await tester.tap(find.text('源代码'));
       await tester.pumpAndSettle();
       expect(find.text('<p>页面-a</p>\n'), findsOneWidget);
       await tester.tap(find.text('诊断详情'));
