@@ -8,7 +8,7 @@ AI质量检测包含桌面客户端和云端服务两部分。
 
 客户端和云端都支持 OpenAI 兼容渠道。客户端适合本地测试和离线保存，云端适合多人访问、报告分享和集中管理。
 
-当前版本为 **v0.1.1**。项目地址：[ai_detect](https://github.com/liuxuzzz/ai_detect)，安装包可在 [GitHub Releases](https://github.com/liuxuzzz/ai_detect/releases) 下载。
+当前版本为 **v0.1.2**。项目地址：[ai_detect](https://github.com/liuxuzzz/ai_detect)，安装包可在 [GitHub Releases](https://github.com/liuxuzzz/ai_detect/releases) 下载。
 
 云端 Demo：[https://ai_detect.wv.gs/](https://ai_detect.wv.gs/)。可以直接在浏览器中注册和使用，也可以将这个地址填写到客户端，用于上传和分享测试报告。
 
