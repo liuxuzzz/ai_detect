@@ -10,6 +10,11 @@ export const formatDuration = (value) => scaledMetric(value, 0.001, ' s', 2)
 export const formatTokens = (value) => formatMetric(value, ' token', 0)
 export const formatThroughput = (value) => formatMetric(value, ' token/s', 0)
 
+export function reportThroughput(report = {}) {
+  const value = report.metrics?.tokens_per_second ?? report.tokens_per_second
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : null
+}
+
 const dateFormat = new Intl.DateTimeFormat('sv-SE', {
   timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit',
   hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23',
@@ -25,7 +30,7 @@ export function metricItems(report = {}) {
   return [
     ['评分', metrics.rating_count ? `${formatMetric(metrics.average_score, '', 1)} / 5` : '未评分'],
     ['首 token 延时', formatDuration(metrics.ttft_ms)],
-    ['平均吞吐', formatThroughput(metrics.tokens_per_second)],
+    ['平均吞吐', formatThroughput(reportThroughput(report))],
     ['总 token', formatTokens(metrics.total_tokens)],
     ['输入 token', formatTokens(metrics.input_tokens)],
     ['输出 token', formatTokens(metrics.output_tokens)],

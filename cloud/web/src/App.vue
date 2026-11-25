@@ -11,10 +11,11 @@ import TaskActions from './TaskActions.vue'
 import TaskMonitor from './TaskMonitor.vue'
 import ReportMetrics from './ReportMetrics.vue'
 import ReportContents from './ReportContents.vue'
+import ReportImageShare from './ReportImageShare.vue'
 import ReportFeedback from './ReportFeedback.vue'
 import SiteSettings from './SiteSettings.vue'
 import AuthDialog from './AuthDialog.vue'
-import { formatMetric, formatDuration, formatThroughput, formatDate } from './report-format'
+import { formatMetric, formatDuration, formatThroughput, formatDate, reportThroughput } from './report-format'
 
 const periods = [
   { key: 'latest', label: '最新测试' },
@@ -47,6 +48,7 @@ const publicFacets = reactive([
 ])
 const selectedReport = ref(null)
 const reportDetails = ref(null)
+const reportElement = ref(null)
 const detailLoading = ref(false)
 const detailError = ref('')
 const detailDialog = ref(false)
@@ -555,16 +557,19 @@ onMounted(async () => { await Promise.all([loadPublic(), restoreSession()]) })
     </main>
 
     <el-dialog v-model="detailDialog" title="测试报告详情" width="1000px" class="report-dialog" destroy-on-close>
-      <div v-if="selectedReport" class="report-detail">
+      <div v-if="selectedReport" ref="reportElement" class="report-detail">
         <div class="report-detail-head">
           <div><p class="eyebrow">{{ selectedReport.api_domain }}</p><h2>{{ selectedReport.model }}</h2><p>{{ selectedReport.prompt_name || '公开测试结果' }} · {{ formatDate(selectedReport.created_at) }}</p></div>
-          <a class="button outline" :href="`/r/${selectedReport.slug}`" target="_blank" rel="noopener">查看报告 ↗</a>
+          <div class="toolbar-actions" data-image-exclude>
+            <ReportImageShare v-if="reportDetails" :report-element="reportElement" :model="reportDetails.model" />
+            <a class="button outline" :href="`/r/${selectedReport.slug}`" target="_blank" rel="noopener">查看报告 ↗</a>
+          </div>
         </div>
         <p v-if="detailLoading" role="status">正在加载报告数据…</p>
         <p v-else-if="detailError" class="monitor-error" role="alert">{{ detailError }}</p>
         <template v-else-if="reportDetails">
           <ReportMetrics :report="reportDetails" />
-          <ReportContents :data="reportDetails.data" />
+          <ReportContents :data="reportDetails.data" :average="reportThroughput(reportDetails)" />
           <ReportFeedback :key="`${reportDetails.id}-${user?.id || 'anonymous'}`" :report="reportDetails" :token="loggedIn ? token : ''" @rated="reportRated" @login="openAuth()" />
         </template>
       </div>

@@ -1,8 +1,9 @@
 <script setup>
 import { computed, ref } from 'vue'
 import { samplesInRange } from './report-data'
+import { formatThroughput } from './report-format'
 
-const props = defineProps({ samples: { type: Array, default: () => [] } })
+const props = defineProps({ samples: { type: Array, default: () => [] }, average: Number })
 const windowSize = ref(null)
 const offset = ref(0)
 const hovered = ref(null)
@@ -10,7 +11,7 @@ const last = computed(() => Math.max(1, props.samples.at(-1)?.seconds || 0))
 const span = computed(() => Math.min(last.value, windowSize.value ?? last.value))
 const start = computed(() => Math.max(0, Math.min(offset.value, last.value - span.value)))
 const visible = computed(() => samplesInRange(props.samples, start.value, span.value))
-const peak = computed(() => Math.max(1, Math.ceil(visible.value.reduce((max, p) => Math.max(max, p.tps), 0))))
+const peak = computed(() => Math.max(1, Math.ceil(visible.value.reduce((max, p) => Math.max(max, p.tps), props.average ?? 0))))
 const x = (second) => 50 + (second - start.value) / span.value * 570
 const y = (tokens) => 170 - tokens / peak.value * 140
 const points = computed(() => visible.value.map((p) => `${x(p.seconds)},${y(p.tps)}`).join(' '))
@@ -27,7 +28,7 @@ function hover(event) {
 
 <template>
   <section class="live-chart" aria-label="报告吞吐曲线">
-    <div class="panel-toolbar"><strong>每秒吞吐曲线</strong><span class="toolbar-actions">
+    <div class="panel-toolbar"><strong>每秒吞吐曲线</strong><span class="toolbar-actions" data-image-exclude>
       <button class="small-button" type="button" aria-label="放大报告曲线" @click="zoom(0.7)">＋</button>
       <button class="small-button" type="button" aria-label="缩小报告曲线" @click="zoom(1.4)">－</button>
       <button class="small-button" type="button" @click="windowSize = null; offset = 0">显示全部</button>
@@ -37,12 +38,14 @@ function hover(event) {
       <path d="M50 20V170H620" fill="none" stroke="var(--line)" />
       <text x="2" y="25">{{ peak }} token/s</text><text x="25" y="175">0</text>
       <text x="50" y="200">{{ start.toFixed(1) }} s</text><text x="550" y="200">{{ (start + span).toFixed(1) }} s</text>
+      <line v-if="average != null" x1="50" x2="620" :y1="y(average)" :y2="y(average)" stroke="#2563a4" stroke-width="2" stroke-dasharray="6 4" />
       <polyline :points="points" fill="none" stroke="var(--coral)" stroke-width="2" />
       <circle v-if="visible.length === 1" :cx="x(visible[0].seconds)" :cy="y(visible[0].tps)" r="3" fill="var(--coral)" />
-      <template v-if="selected"><line :x1="x(selected.seconds)" y1="20" :x2="x(selected.seconds)" y2="170" stroke="var(--muted)" stroke-dasharray="3 3" /><circle :cx="x(selected.seconds)" :cy="y(selected.tps)" r="4" fill="var(--coral)" /></template>
+      <g v-if="selected" data-image-exclude><line :x1="x(selected.seconds)" y1="20" :x2="x(selected.seconds)" y2="170" stroke="var(--muted)" stroke-dasharray="3 3" /><circle :cx="x(selected.seconds)" :cy="y(selected.tps)" r="4" fill="var(--coral)" /></g>
     </svg>
     <p v-else class="muted">未保存曲线采样。</p>
-    <div class="chart-caption">{{ selected ? `${selected.seconds.toFixed(2)} s · ${Math.round(selected.tps).toLocaleString('en-US')} token/s` : '悬停查看每个点的 token，滚轮缩放。曲线按流式片段估算。' }}</div>
-    <label v-if="last > span" class="chart-range">时间窗口<input type="range" :value="start" min="0" :max="last - span" step="0.1" aria-label="报告曲线时间窗口" @input="offset = Number($event.target.value)" /></label>
+    <div v-if="samples.length && average != null" class="chart-average"><span aria-hidden="true"></span>平均吞吐 {{ formatThroughput(average) }}</div>
+    <div class="chart-caption" data-image-exclude>{{ selected ? `${selected.seconds.toFixed(2)} s · ${formatThroughput(selected.tps)}` : '悬停查看每个点的 token，滚轮缩放。曲线按流式片段估算。' }}</div>
+    <label v-if="last > span" class="chart-range" data-image-exclude>时间窗口<input type="range" :value="start" min="0" :max="last - span" step="0.1" aria-label="报告曲线时间窗口" @input="offset = Number($event.target.value)" /></label>
   </section>
 </template>

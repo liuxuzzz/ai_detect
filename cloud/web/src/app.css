@@ -208,12 +208,27 @@ button:disabled { cursor: not-allowed; opacity: .5; }
 }
 
 .report-page { max-width: 1100px; }
-.report-page h1 { margin: 0; font-size: 24px; overflow-wrap: anywhere; }
+.report-detail-head h1 { margin: 0; font-size: 24px; overflow-wrap: anywhere; }
 .report-dialog .el-dialog__body { max-height: calc(100dvh - 150px); overflow: auto; }
 .report-contents { display: grid; gap: 16px; margin: 20px 0; }
 .report-contents summary { cursor: pointer; }
 .report-contents .panel-heading { margin-bottom: 10px; }
+.report-model-preview .model-preview { display: block; }
+.chart-average { display: flex; align-items: center; gap: 8px; color: #2563a4; font-weight: 600; font-size: 12px; }
+.chart-average span { width: 22px; border-top: 2px dashed currentColor; }
 .report-feedback { margin-top: 24px; }
+.report-image-dialog .el-dialog__body { max-height: 68dvh; overflow: auto; }
+.report-image-stage { height: min(52dvh, 560px); display: grid; place-items: center; background: var(--soft); }
+.report-image-target { overflow: hidden; background: white; }
+.report-image-target iframe { display: block; border: 0; transform-origin: top left; }
+.report-image-result, .report-image-frame { display: block; width: 100%; height: auto; }
+.report-image-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+.report-image-staging { position: fixed; top: 0; right: 100%; pointer-events: none; }
+.report-image-export { padding: 20px; }
+.report-image-export .comment-list, .report-image-export .live-output { max-height: none; overflow: visible; }
+.report-image-watermark { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-top: 20px; padding: 10px 0; border-top: 1px solid var(--line); overflow-wrap: anywhere; color: var(--muted); }
+.report-image-watermark strong { color: var(--ink); }
+.report-image-watermark img { flex: none; width: 112px; height: 112px; }
 .site-settings { border: 1px solid var(--line); border-radius: 6px; padding: 16px; }
 .registration-setting { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
 .registration-setting p { margin-bottom: 0; }

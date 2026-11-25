@@ -1,13 +1,15 @@
 <script setup>
 import { onBeforeUnmount, onMounted, ref } from 'vue'
 import { api } from './api'
-import { formatDate } from './report-format'
+import { formatDate, reportThroughput } from './report-format'
 import ReportMetrics from './ReportMetrics.vue'
 import ReportContents from './ReportContents.vue'
 import ReportFeedback from './ReportFeedback.vue'
+import ReportImageShare from './ReportImageShare.vue'
 
 const props = defineProps({ kind: String, identifier: String })
 const report = ref(null)
+const reportElement = ref(null)
 const loading = ref(true)
 const error = ref('')
 const token = ref(localStorage.getItem('aijiance_token') || '')
@@ -56,10 +58,13 @@ function login() { location.assign('/') }
     <main class="page report-page" :aria-busy="loading">
       <p v-if="loading" class="empty-cell" role="status">正在加载报告数据…</p>
       <p v-else-if="error" class="monitor-error" role="alert">{{ error }}</p>
-      <article v-else-if="report">
-        <header class="report-detail-head"><div><p class="eyebrow">{{ report.api_domain }}</p><h1>{{ report.model }}</h1><p>{{ report.prompt_name || '测试报告' }} · {{ formatDate(report.created_at) }}</p></div></header>
+      <article v-else-if="report" ref="reportElement">
+        <header class="report-detail-head">
+          <div><p class="eyebrow">{{ report.api_domain }}</p><h1>{{ report.model }}</h1><p>{{ report.prompt_name || '测试报告' }} · {{ formatDate(report.created_at) }}</p></div>
+          <ReportImageShare :report-element="reportElement" :model="report.model" />
+        </header>
         <ReportMetrics :report="report" />
-        <ReportContents :data="report.data" />
+        <ReportContents :data="report.data" :average="reportThroughput(report)" />
         <ReportFeedback :report="report" :token="token" @rated="rated" @login="login" />
       </article>
     </main>

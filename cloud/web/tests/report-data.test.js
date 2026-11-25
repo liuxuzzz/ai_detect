@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { modelPreview, samplesInRange, reasoningLabel } from '../src/report-data.js'
-import { metricItems, formatDuration, formatTokens } from '../src/report-format.js'
+import { metricItems, formatDuration, formatTokens, reportThroughput } from '../src/report-format.js'
 
 test('report units match the desktop and missing cache is distinct from zero', () => {
   assert.equal(formatDuration(1250), '1.25 s')
@@ -19,6 +19,15 @@ test('chart window retains fractional time samples and zero throughput', () => {
   const points = [{ seconds: 0, tps: 0 }, { seconds: 0.25, tps: 8 }, { seconds: 1, tps: 2 }]
   assert.deepEqual(samplesInRange(points, 0, 0.5), points.slice(0, 2))
   assert.deepEqual(samplesInRange(points, 0.5, 0.5), [points[2]])
+})
+
+test('chart and metrics use the report average even when the visible samples differ', () => {
+  const report = { tokens_per_second: 99, metrics: { tokens_per_second: 19.7 } }
+  assert.equal(reportThroughput(report), 19.7)
+  assert.equal(Object.fromEntries(metricItems(report))['平均吞吐'], '20 token/s')
+  assert.equal(reportThroughput({ tokens_per_second: 0 }), 0)
+  assert.equal(reportThroughput({ metrics: { tokens_per_second: Infinity } }), null)
+  assert.equal(reportThroughput({}), null)
 })
 
 test('preview uses the last artifact or isolated HTML, while plain output stays text', () => {

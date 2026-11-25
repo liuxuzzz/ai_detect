@@ -3,7 +3,7 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import ReportChart from './ReportChart.vue'
 import { modelPreview, reasoningLabel } from './report-data'
 
-const props = defineProps({ data: { type: Object, required: true } })
+const props = defineProps({ data: { type: Object, required: true }, average: Number })
 const frame = ref(null)
 const height = ref(540)
 const preview = computed(() => modelPreview(props.data))
@@ -27,9 +27,11 @@ onBeforeUnmount(() => window.removeEventListener('message', resize))
     <p v-if="data.error" class="monitor-error" role="alert">测试失败：{{ data.error }}</p>
     <p class="muted">{{ data.upstream_name }} · {{ reasoningLabel(data.reasoning_effort) }} · {{ data.detection_mode === 'agent' ? 'Agent 测试' : '单次测试' }}</p>
     <details v-if="data.prompt"><summary>测试提示词</summary><pre class="live-output">{{ data.prompt }}</pre></details>
-    <ReportChart :samples="data.samples || []" />
+    <ReportChart :samples="data.samples || []" :average="average" />
     <section><h2 class="panel-heading">模型输出</h2>
-      <iframe v-if="preview" ref="frame" title="模型输出预览" class="model-preview" sandbox="allow-scripts" :srcdoc="source" :style="{ height: `${height}px` }" />
+      <div v-if="preview" class="report-model-preview">
+        <iframe ref="frame" title="模型输出预览" class="model-preview" sandbox="allow-scripts" :srcdoc="source" :style="{ height: `${height}px` }" />
+      </div>
       <details v-if="preview"><summary>原始输出</summary><pre class="live-output">{{ data.output || preview }}</pre></details>
       <pre v-else-if="data.output" class="live-output">{{ data.output }}</pre>
       <p v-else-if="!preview" class="muted">未保存模型输出。</p>

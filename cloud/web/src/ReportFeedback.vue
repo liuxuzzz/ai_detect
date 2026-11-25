@@ -61,15 +61,15 @@ async function comment() {
   <div class="report-feedback">
     <div class="rating-box">
       <div><strong>给这个测试报告打分</strong><small v-if="saved">你的评分 {{ saved }} / 5</small></div>
-      <div v-if="token" class="rating-actions">
+      <div v-if="token" class="rating-actions" data-image-exclude>
         <el-rate v-model="draft" :disabled="ratingSaving" :colors="['#eb5e3a', '#eb5e3a', '#eb5e3a']" />
         <button class="small-button filled" :disabled="ratingSaving || !draft || draft === saved" type="button" @click="rate">{{ saved ? '更新评分' : '提交评分' }}</button>
       </div>
-      <button v-else class="small-button filled" type="button" @click="emit('login')">登录后评分</button>
+      <button v-else class="small-button filled" type="button" data-image-exclude @click="emit('login')">登录后评分</button>
     </div>
     <section class="comments-box">
       <h3>评论 {{ comments.total }}</h3>
-      <form class="comment-form" @submit.prevent="comment">
+      <form class="comment-form" data-image-exclude @submit.prevent="comment">
         <el-input v-model="commentText" type="textarea" :rows="2" maxlength="2000" show-word-limit
           :placeholder="token ? '写下你的测试观察…' : '登录后可以发表评论'" :disabled="!token || commentSaving" />
         <button class="button primary" type="submit" :disabled="commentSaving">发表评论</button>

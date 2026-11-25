@@ -1,1 +1,1 @@
-{"type":"module","scripts":{"dev":"vite --host 0.0.0.0","build":"vite build","test":"node --test tests/*.test.js"},"dependencies":{"@element-plus/icons-vue":"2.3.2","@vitejs/plugin-vue":"latest","vite":"latest","vue":"latest","element-plus":"latest"},"devDependencies":{}}
+{"type":"module","scripts":{"dev":"vite --host 0.0.0.0","build":"vite build","test":"node --test tests/*.test.js"},"dependencies":{"@element-plus/icons-vue":"2.3.2","@vitejs/plugin-vue":"latest","element-plus":"latest","html-to-image":"1.11.13","qrcode":"1.5.4","vite":"latest","vue":"latest"}}
