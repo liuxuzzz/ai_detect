@@ -1,5 +1,5 @@
 <script setup>
-import { reactive, ref } from 'vue'
+import { onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { api } from './api'
 import ClientKeys from './ClientKeys.vue'
@@ -13,6 +13,35 @@ const emit = defineEmits(['session-updated'])
 const section = ref('client-keys')
 const saving = ref(false)
 const password = reactive({ current: '', next: '', confirm: '' })
+const sharing = ref(true)
+const sharingLoading = ref(true)
+const sharingSaving = ref(false)
+
+onMounted(async () => {
+  try {
+    const result = await api.reportVisibility(props.token)
+    sharing.value = result.public_reports
+  } catch (error) {
+    ElMessage.error(error.message)
+  } finally {
+    sharingLoading.value = false
+  }
+})
+
+async function saveSharing() {
+  if (sharingSaving.value) return
+  sharingSaving.value = true
+  try {
+    const result = await api.updateReportVisibility(props.token, { public_reports: sharing.value })
+    sharing.value = result.public_reports
+    ElMessage.success(result.public_reports ? '已开启公开排行分享' : '已关闭公开排行分享')
+  } catch (error) {
+    sharing.value = !sharing.value
+    ElMessage.error(error.message)
+  } finally {
+    sharingSaving.value = false
+  }
+}
 
 async function changePassword() {
   if (saving.value) return
@@ -45,10 +74,16 @@ async function changePassword() {
     </div>
     <div class="segmented profile-tabs" role="group" aria-label="个人中心设置">
       <button :aria-pressed="section === 'client-keys'" type="button" @click="section = 'client-keys'">我的 Client Key</button>
+      <button :aria-pressed="section === 'sharing'" type="button" @click="section = 'sharing'">报告分享</button>
       <button :aria-pressed="section === 'password'" type="button" @click="section = 'password'">修改密码</button>
     </div>
 
     <ClientKeys v-if="section === 'client-keys'" :token="token" :format-date="formatDate" />
+    <section v-else-if="section === 'sharing'" class="password-panel" aria-labelledby="sharing-heading" :aria-busy="sharingLoading || sharingSaving">
+      <h2 id="sharing-heading" class="panel-heading">公开排行分享</h2>
+      <p class="muted">开启后，自己上传的成功测试会出现在公开排行。关闭后，自己的测试不会出现在公开排行。</p>
+      <label class="sharing-setting"><input v-model="sharing" type="checkbox" :disabled="sharingLoading || sharingSaving" @change="saveSharing" />允许我的测试显示在公开排行</label>
+    </section>
     <section v-else class="password-panel" aria-labelledby="password-heading">
       <h2 id="password-heading" class="panel-heading">修改密码</h2>
       <p class="muted">修改后，其他已登录会话需要重新登录，Client Key 继续有效。</p>

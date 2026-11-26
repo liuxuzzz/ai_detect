@@ -66,6 +66,10 @@ fn auth_routes() -> Router<AppState> {
         .route("/registration", get(site_settings::registration))
         .route("/login", post(auth::login))
         .route("/me", get(auth::me))
+        .route(
+            "/report-visibility",
+            get(auth::report_visibility).put(auth::update_report_visibility),
+        )
         .route("/password", put(auth::change_password))
         .route("/client-keys", get(auth::list_keys).post(auth::create_key))
         .route(

@@ -9,13 +9,9 @@ import TaskEditor from './TaskEditor.vue'
 import PromptManager from './PromptManager.vue'
 import TaskActions from './TaskActions.vue'
 import TaskMonitor from './TaskMonitor.vue'
-import ReportMetrics from './ReportMetrics.vue'
-import ReportContents from './ReportContents.vue'
-import ReportImageShare from './ReportImageShare.vue'
-import ReportFeedback from './ReportFeedback.vue'
 import SiteSettings from './SiteSettings.vue'
 import AuthDialog from './AuthDialog.vue'
-import { formatMetric, formatDuration, formatThroughput, formatDate, reportThroughput } from './report-format'
+import { formatMetric, formatDuration, formatThroughput, formatDate } from './report-format'
 
 const periods = [
   { key: 'latest', label: '最新测试' },
@@ -46,12 +42,6 @@ const publicFacets = reactive([
   { key: 'api_domain', label: '厂商', selected: '', open: false, items: [], page: 0, more: true, loading: false, request: null },
   { key: 'model', label: '模型', selected: '', open: false, items: [], page: 0, more: true, loading: false, request: null },
 ])
-const selectedReport = ref(null)
-const reportDetails = ref(null)
-const reportElement = ref(null)
-const detailLoading = ref(false)
-const detailError = ref('')
-const detailDialog = ref(false)
 const authDialog = ref(false)
 const registrationEnabled = ref(null)
 const workspaceLoading = ref(false)
@@ -132,29 +122,7 @@ for (const facet of publicFacets) {
   })
 }
 function openReport(report) {
-  reportDetails.value = null
-  detailError.value = ''
-  selectedReport.value = report
-  detailDialog.value = true
-}
-watch([detailDialog, () => selectedReport.value?.id, () => user.value?.id], async ([open, id, userId], previous, onCleanup) => {
-  if (!open || !id) return
-  const request = new AbortController()
-  onCleanup(() => request.abort())
-  detailLoading.value = true
-  detailError.value = ''
-  try {
-    const result = await api.reportDetails(id, userId ? token.value : '', request.signal)
-    if (!request.signal.aborted) reportDetails.value = result
-  } catch (error) {
-    if (!request.signal.aborted) detailError.value = error.message
-  } finally {
-    if (!request.signal.aborted) detailLoading.value = false
-  }
-})
-async function reportRated(result) {
-  reportDetails.value = { ...reportDetails.value, average_score: result.average_score, rating_count: result.rating_count, my_score: result.score }
-  await loadPublic()
+  if (report?.slug) location.assign(`/r/${encodeURIComponent(report.slug)}`)
 }
 
 function openAuth() { authDialog.value = true }
@@ -245,7 +213,6 @@ async function removeMyReport(report) {
     ).then(() => true, () => false)
     if (!confirmed) return
     await api.deleteMyReport(token.value, report.id)
-    if (selectedReport.value?.id === report.id) detailDialog.value = false
     ElMessage.success('测试结果已删除')
     await Promise.all([loadWorkspace(), refreshPublic()])
   } catch (error) {
@@ -556,25 +523,6 @@ onMounted(async () => { await Promise.all([loadPublic(), restoreSession()]) })
       </section>
     </main>
 
-    <el-dialog v-model="detailDialog" title="测试报告详情" width="1000px" class="report-dialog" destroy-on-close>
-      <div v-if="selectedReport" ref="reportElement" class="report-detail">
-        <div class="report-detail-head">
-          <div><p class="eyebrow">{{ selectedReport.api_domain }}</p><h2>{{ selectedReport.model }}</h2><p>{{ selectedReport.prompt_name || '公开测试结果' }} · {{ formatDate(selectedReport.created_at) }}</p></div>
-          <div class="toolbar-actions" data-image-exclude>
-            <ReportImageShare v-if="reportDetails" :report-element="reportElement" :model="reportDetails.model" />
-            <a class="button outline" :href="`/r/${selectedReport.slug}`" target="_blank" rel="noopener">查看报告 ↗</a>
-          </div>
-        </div>
-        <p v-if="detailLoading" role="status">正在加载报告数据…</p>
-        <p v-else-if="detailError" class="monitor-error" role="alert">{{ detailError }}</p>
-        <template v-else-if="reportDetails">
-          <h3 class="panel-heading report-section-title">检测指标</h3>
-          <ReportMetrics :report="reportDetails" />
-          <ReportContents :data="reportDetails.data" :average="reportThroughput(reportDetails)" />
-          <ReportFeedback :key="`${reportDetails.id}-${user?.id || 'anonymous'}`" :report="reportDetails" :token="loggedIn ? token : ''" @rated="reportRated" @login="openAuth()" />
-        </template>
-      </div>
-    </el-dialog>
     <AuthDialog v-if="authDialog" @close="authDialog = false" @session="signedIn" />
     <TaskEditor v-if="taskFormVisible" :token="token"
       :channels="channels.filter((channel) => channel.enabled && channel.owner_id === user?.id)"

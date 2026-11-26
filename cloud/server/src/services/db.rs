@@ -29,7 +29,9 @@ pub async fn initialize(client: &Client) -> anyhow::Result<()> {
         "\n",
         include_str!("../../migrations/013_identity.sql"),
         "\n",
-        include_str!("../../migrations/014_site_url.sql")
+        include_str!("../../migrations/014_site_url.sql"),
+        "\n",
+        include_str!("../../migrations/015_report_visibility.sql")
     );
     client.batch_execute(sql).await?;
     super::report_legacy::migrate(client).await?;
@@ -46,7 +48,7 @@ pub async fn user(state: &AppState, id: i64) -> Option<Row> {
         .await
         .ok()?
         .query_opt(
-            "SELECT id,email,is_admin,disabled,auth_version,is_superadmin FROM users WHERE id=$1",
+            "SELECT id,email,is_admin,disabled,auth_version,is_superadmin,public_reports FROM users WHERE id=$1",
             &[&id],
         )
         .await

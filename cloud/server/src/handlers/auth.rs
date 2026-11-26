@@ -1,7 +1,7 @@
 use crate::{
     error::{ApiResult, ServiceResult},
     middleware::Authenticated,
-    models::{Credentials, PasswordChange},
+    models::{Credentials, PasswordChange, ReportVisibilityUpdate},
     services::{auth, site_settings},
     state::AppState,
 };
@@ -66,6 +66,27 @@ pub(crate) async fn change_password(
     Ok((
         [(header::CACHE_CONTROL, "private, no-store")],
         Json(auth::change_password(&state, &claims, input).await?),
+    ))
+}
+
+pub(crate) async fn report_visibility(
+    State(state): State<AppState>,
+    Authenticated(claims): Authenticated,
+) -> ServiceResult<impl IntoResponse> {
+    Ok((
+        [(header::CACHE_CONTROL, "private, no-store")],
+        Json(auth::report_visibility(&state, claims.sub).await?),
+    ))
+}
+
+pub(crate) async fn update_report_visibility(
+    State(state): State<AppState>,
+    Authenticated(claims): Authenticated,
+    Json(input): Json<ReportVisibilityUpdate>,
+) -> ServiceResult<impl IntoResponse> {
+    Ok((
+        [(header::CACHE_CONTROL, "private, no-store")],
+        Json(auth::update_report_visibility(&state, claims.sub, input).await?),
     ))
 }
 

@@ -1,6 +1,9 @@
 use crate::{
     error::{err, AppError, ErrorKind, ServiceResult},
-    models::{Claims, ClientKeyInfo, CreatedClientKey, Credentials, PasswordChange},
+    models::{
+        Claims, ClientKeyInfo, CreatedClientKey, Credentials, PasswordChange,
+        ReportVisibilityUpdate,
+    },
     services::{db::user, site_settings},
     state::AppState,
 };
@@ -213,8 +216,41 @@ pub(crate) async fn me(state: &AppState, claims: &Claims) -> ServiceResult<Value
         .ok_or_else(|| err(ErrorKind::NotFound, "用户不存在"))?;
     Ok(json!({
         "id": row.get::<_, i64>(0), "email": row.get::<_, String>(1),
-        "is_admin": row.get::<_, bool>(2), "disabled": row.get::<_, bool>(3), "is_superadmin": row.get::<_, bool>(5)
+        "is_admin": row.get::<_, bool>(2), "disabled": row.get::<_, bool>(3), "is_superadmin": row.get::<_, bool>(5),
+        "public_reports": row.get::<_, bool>(6)
     }))
+}
+
+pub(crate) async fn report_visibility(
+    state: &AppState,
+    user_id: i64,
+) -> ServiceResult<Value> {
+    let row = state
+        .connection()
+        .await?
+        .query_one("SELECT public_reports FROM users WHERE id=$1", &[&user_id])
+        .await
+        .map_err(AppError::internal)?;
+    Ok(json!({"public_reports": row.get::<_, bool>(0)}))
+}
+
+pub(crate) async fn update_report_visibility(
+    state: &AppState,
+    user_id: i64,
+    input: ReportVisibilityUpdate,
+) -> ServiceResult<Value> {
+    let updated = state
+        .connection()
+        .await?
+        .query_opt(
+            "UPDATE users SET public_reports=$1 WHERE id=$2 AND NOT disabled RETURNING public_reports",
+            &[&input.public_reports, &user_id],
+        )
+        .await
+        .map_err(AppError::internal)?
+        .ok_or_else(|| err(ErrorKind::Forbidden, "账号已禁用或不存在"))?;
+    super::cache::clear(state).await;
+    Ok(json!({"public_reports": updated.get::<_, bool>(0)}))
 }
 
 const CLIENT_KEY_PREFIX_LEN: usize = 12;

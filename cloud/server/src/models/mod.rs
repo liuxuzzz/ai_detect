@@ -63,6 +63,11 @@ pub(crate) struct PasswordChange {
     pub(crate) new_password: String,
 }
 
+#[derive(Deserialize)]
+pub(crate) struct ReportVisibilityUpdate {
+    pub(crate) public_reports: bool,
+}
+
 #[derive(Serialize)]
 pub(crate) struct ClientKeyInfo {
     pub(crate) id: i64,
