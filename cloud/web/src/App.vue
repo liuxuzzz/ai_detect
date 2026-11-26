@@ -568,6 +568,7 @@ onMounted(async () => { await Promise.all([loadPublic(), restoreSession()]) })
         <p v-if="detailLoading" role="status">正在加载报告数据…</p>
         <p v-else-if="detailError" class="monitor-error" role="alert">{{ detailError }}</p>
         <template v-else-if="reportDetails">
+          <h3 class="panel-heading report-section-title">检测指标</h3>
           <ReportMetrics :report="reportDetails" />
           <ReportContents :data="reportDetails.data" :average="reportThroughput(reportDetails)" />
           <ReportFeedback :key="`${reportDetails.id}-${user?.id || 'anonymous'}`" :report="reportDetails" :token="loggedIn ? token : ''" @rated="reportRated" @login="openAuth()" />

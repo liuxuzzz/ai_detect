@@ -63,6 +63,7 @@ function login() { location.assign('/') }
           <div><p class="eyebrow">{{ report.api_domain }}</p><h1>{{ report.model }}</h1><p>{{ report.prompt_name || '测试报告' }} · {{ formatDate(report.created_at) }}</p></div>
           <ReportImageShare :report-element="reportElement" :model="report.model" />
         </header>
+        <h2 class="panel-heading report-section-title">检测指标</h2>
         <ReportMetrics :report="report" />
         <ReportContents :data="report.data" :average="reportThroughput(report)" />
         <ReportFeedback :report="report" :token="token" @rated="rated" @login="login" />

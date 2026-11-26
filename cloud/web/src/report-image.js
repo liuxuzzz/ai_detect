@@ -19,8 +19,7 @@ export async function captureFrame(stream, target, signal) {
   } catch {
     throw new Error('无法捕获预览区域，请重新选择当前报告标签页')
   }
-  const deadline = AbortSignal.any([signal, AbortSignal.timeout(5000)])
-  deadline.throwIfAborted()
+  signal.throwIfAborted()
 
   const video = document.createElement('video')
   video.muted = true
@@ -28,20 +27,28 @@ export async function captureFrame(stream, target, signal) {
   video.srcObject = stream
   let onAbort
   try {
-    // This video is attached after cropTo resolves, so its first frame is cropped.
-    const aborted = new Promise((_, reject) => {
-      onAbort = () => reject(new Error('等待预览画面超时，请重试'))
-      deadline.addEventListener('abort', onAbort, { once: true })
+    await video.play()
+    await new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => finish(new Error('等待预览画面超时，请重试')), 5000)
+      const frame = video.requestVideoFrameCallback(() => finish())
+      function finish(error) {
+        clearTimeout(timeout)
+        video.cancelVideoFrameCallback(frame)
+        signal.removeEventListener('abort', onAbort)
+        if (error) reject(error)
+        else resolve()
+      }
+      onAbort = () => finish(signal.reason || new Error('已取消截图'))
+      if (signal.aborted) onAbort()
+      else signal.addEventListener('abort', onAbort, { once: true })
     })
-    await Promise.race([video.play(), aborted])
-    deadline.throwIfAborted()
     const canvas = document.createElement('canvas')
     canvas.width = video.videoWidth
     canvas.height = video.videoHeight
     canvas.getContext('2d').drawImage(video, 0, 0)
     return canvas.toDataURL('image/png')
   } finally {
-    deadline.removeEventListener('abort', onAbort)
+    if (onAbort) signal.removeEventListener('abort', onAbort)
     video.pause()
     video.srcObject = null
   }
@@ -77,6 +84,8 @@ export async function reportImage(report, frameImage, signal) {
   const snapshot = report.cloneNode(true)
   snapshot.querySelectorAll('[data-image-exclude]').forEach(node => node.remove())
   const frame = snapshot.querySelector('.report-model-preview iframe')
+  if (!snapshot.querySelector('.detail-metrics')) throw new Error('报告图片缺少检测指标')
+  if (!snapshot.querySelector('.live-chart')) throw new Error('报告图片缺少吞吐曲线')
   if (frame) {
     if (!frameImage) throw new Error('请先截取模型输出的画面')
     const still = new Image()
