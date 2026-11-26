@@ -56,18 +56,18 @@ export async function captureFrame(stream, target, signal) {
 
 async function watermark() {
   const { default: QRCode } = await import('qrcode')
-  const site = new URL('/', location.href).href
+  const reportUrl = new URL(location.pathname, location.origin).href
   const footer = document.createElement('footer')
   footer.className = 'report-image-watermark'
   const qr = new Image(112, 112)
-  qr.alt = '云端网站二维码'
-  qr.src = await QRCode.toDataURL(site, { scale: 6 })
+  qr.alt = '报告地址二维码'
+  qr.src = await QRCode.toDataURL(reportUrl, { scale: 6 })
   await qr.decode()
   const labels = document.createElement('div')
   const title = document.createElement('strong')
   title.textContent = 'AI质量检测'
   labels.append(title)
-  for (const label of [site, projectUrl]) {
+  for (const label of [`报告地址：${reportUrl}`, `开源项目地址：${projectUrl}`]) {
     const line = document.createElement('div')
     line.textContent = label
     labels.append(line)
