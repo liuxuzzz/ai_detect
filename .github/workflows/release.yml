@@ -160,6 +160,7 @@ jobs:
           RELEASE_TAG: ${{ github.ref_name }}
           GH_REPO: ${{ github.repository }}
         run: |
+          sed -i 's/\r$//' release/*.sha256
           (cd release && cat *.sha256 | sha256sum --check)
           if ! gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
             gh release create "$RELEASE_TAG" --verify-tag --title "AI质量检测 $RELEASE_TAG" --notes-file CHANGELOG.md --draft
