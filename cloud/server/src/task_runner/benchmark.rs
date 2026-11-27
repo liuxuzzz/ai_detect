@@ -8,7 +8,9 @@ use std::time::{Duration, Instant};
 use tokio::sync::watch;
 use tokio::{net::TcpStream, time::timeout};
 
-const RESPONSE_LIMIT: usize = 2 * 1024 * 1024;
+const RESPONSE_LIMIT: usize = 64 * 1024 * 1024;
+const CONTENT_LIMIT: usize = 16 * 1024 * 1024;
+const ERROR_RESPONSE_LIMIT: usize = 2 * 1024 * 1024;
 const CONNECTION_TIMEOUT: Duration = Duration::from_secs(45);
 const STREAM_IDLE_TIMEOUT: Duration = super::REQUEST_TIMEOUT;
 
@@ -60,8 +62,13 @@ async fn measure_with_client(
     start: Instant,
     tcp_ms: Option<f64>,
 ) -> anyhow::Result<Upload> {
-    let mut progress = Progress::new(channel.progress.clone(), start, url.to_string(), tcp_ms);
-    progress.publish("等待上游响应", &Metrics::default(), true);
+    let mut progress = Progress::new(
+        channel.progress.clone(),
+        start,
+        url.clone(),
+        tcp_ms,
+        channel.credential.clone(),
+    );
     let api = Api::for_channel(&channel.base_url, &channel.model, &channel.provider);
     let body = api.request(&channel.model, &channel.prompt, channel.effort);
     let mut request = client
@@ -71,19 +78,33 @@ async fn measure_with_client(
     if !channel.credential.is_empty() {
         request = request.bearer_auth(&channel.credential);
     }
-    let response = timeout(super::REQUEST_TIMEOUT, request.send())
+    let request = request.build().map_err(|_| anyhow!("无法构建上游请求"))?;
+    progress.request(&request);
+    progress.publish("等待上游响应", &Metrics::default(), true);
+    let mut response = timeout(super::REQUEST_TIMEOUT, client.execute(request))
         .await
         .context("等待上游响应超时")?
         .map_err(|_| anyhow!("无法连接上游模型接口"))?;
     progress.response(&response);
     progress.publish("已收到响应头", &Metrics::default(), true);
-    ensure!(
-        response.status().is_success(),
-        "上游模型接口返回 HTTP {}",
-        response.status().as_u16()
-    );
+    let status = response.status();
+    if !status.is_success() {
+        let read = timeout(Duration::from_secs(5), async {
+            while let Some(chunk) = response.chunk().await? {
+                progress.chunk(&chunk);
+                if progress.received_bytes >= ERROR_RESPONSE_LIMIT {
+                    return Ok(false);
+                }
+            }
+            Ok::<_, reqwest::Error>(true)
+        })
+        .await;
+        progress.response_incomplete = !matches!(read, Ok(Ok(true)));
+        return Err(anyhow!("上游模型接口返回 HTTP {}", status.as_u16()));
+    }
     let mut metrics = read_response(response, start, &mut progress, api).await?;
     metrics.tcp_ms = tcp_ms;
+    progress.complete();
     Ok(super::report::record(host, channel, metrics))
 }
 
@@ -150,6 +171,10 @@ impl Metrics {
         if let Some(usage) = usage {
             self.read_usage(&usage);
         }
+        ensure!(
+            self.text.len() + self.reasoning.len() <= CONTENT_LIMIT,
+            "模型输出超过 16 MiB"
+        );
         Ok(())
     }
 
@@ -237,6 +262,10 @@ impl Metrics {
     }
 
     fn read_line(&mut self, line: &[u8], elapsed_ms: f64) -> anyhow::Result<bool> {
+        ensure!(
+            line.trim_ascii_end().len() <= CONTENT_LIMIT,
+            "单条流式事件超过 16 MiB"
+        );
         let Some(data) = line.strip_prefix(b"data:") else {
             return Ok(false);
         };
@@ -249,11 +278,13 @@ impl Metrics {
         }
         let payload =
             serde_json::from_slice(data).map_err(|_| anyhow!("上游返回无效的流式数据"))?;
-        if self.events.len() == 40 {
-            self.events.remove(0);
+        if data.len() <= 16 * 1024 {
+            if self.events.len() == 40 {
+                self.events.remove(0);
+            }
+            self.events
+                .push(json!({"elapsed_ms": elapsed_ms, "payload": payload}));
         }
-        self.events
-            .push(json!({"elapsed_ms": elapsed_ms, "payload": payload}));
         self.read_payload(&payload, Some(elapsed_ms))?;
         Ok(self.api == Api::Responses && self.finished)
     }
@@ -289,20 +320,30 @@ async fn read_response(
         ..Metrics::default()
     };
     let mut buffer = Vec::new();
-    let mut received = 0;
-    'response: while let Some(chunk) = timeout(STREAM_IDLE_TIMEOUT, response.chunk())
-        .await
-        .context("上游流式响应空闲超时")?
-        .map_err(|_| anyhow!("读取上游响应失败"))?
-    {
+    let limit = if streaming {
+        RESPONSE_LIMIT
+    } else {
+        CONTENT_LIMIT
+    };
+    'response: loop {
+        let chunk = timeout(STREAM_IDLE_TIMEOUT, response.chunk())
+            .await
+            .context("上游流式响应空闲超时")?
+            .map_err(|_| anyhow!("读取上游响应失败"))?;
+        let Some(chunk) = chunk else {
+            progress.response_incomplete = false;
+            break;
+        };
         let elapsed = elapsed_ms(start);
         if !chunk.is_empty() {
             metrics.first_byte_ms.get_or_insert(elapsed);
         }
-        received += chunk.len();
-        progress.received_bytes = received;
-        progress.chunks += 1;
-        ensure!(received <= RESPONSE_LIMIT, "上游响应超过大小限制");
+        progress.chunk(&chunk);
+        ensure!(
+            progress.received_bytes <= limit,
+            "上游响应超过大小限制（{} MiB）",
+            limit / (1024 * 1024)
+        );
         buffer.extend_from_slice(&chunk);
         if streaming {
             let mut consumed = 0;
@@ -319,6 +360,7 @@ async fn read_response(
                 }
             }
             buffer.drain(..consumed);
+            ensure!(buffer.len() <= CONTENT_LIMIT, "单条流式事件超过 16 MiB");
         }
         progress.publish("接收模型输出", &metrics, false);
     }

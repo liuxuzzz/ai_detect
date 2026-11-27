@@ -1,7 +1,10 @@
 use crate::{
     error::{err, ApiResult, AppError, ErrorKind, ServiceResult},
     middleware::{Authenticated, ClientOwner, OptionalUser},
-    models::{CommentInput, PageQuery, RatingInput, RatingResult, ShareInput, Upload},
+    models::{
+        CommentInput, PageQuery, RatingInput, RatingResult, ReportRankingVisibility, ShareInput,
+        Upload,
+    },
     services::reports,
     state::AppState,
 };
@@ -57,6 +60,17 @@ pub(crate) async fn delete(
 ) -> ServiceResult<StatusCode> {
     reports::delete(&state, claims.sub, id).await?;
     Ok(StatusCode::NO_CONTENT)
+}
+
+pub(crate) async fn update_ranking_visibility(
+    State(state): State<AppState>,
+    Authenticated(claims): Authenticated,
+    Path(id): Path<i64>,
+    Json(visibility): Json<ReportRankingVisibility>,
+) -> ApiResult<Value> {
+    reports::update_ranking_visibility(&state, claims.sub, id, visibility)
+        .await
+        .map(Json)
 }
 
 pub(crate) async fn create_share(

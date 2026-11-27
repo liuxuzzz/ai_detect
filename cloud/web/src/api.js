@@ -45,6 +45,7 @@ export const api = {
   report: (slug, token, signal) => json(`/api/public/reports/${encodeURIComponent(slug)}`, { headers: token ? auth(token) : {}, signal, cache: 'no-store' }),
   sharedReport: (share, token, signal) => json(`/api/public/shares/${encodeURIComponent(share)}`, { headers: token ? auth(token) : {}, signal, cache: 'no-store' }),
   deleteMyReport: (token, id) => json(`/api/reports/${id}`, { method: 'DELETE', headers: auth(token) }),
+  updateReportRanking: (token, id, visibility) => json(`/api/reports/${id}/ranking-visibility`, { method: 'PUT', headers: auth(token), body: JSON.stringify(visibility) }),
   comments: (id, query = {}, signal) => {
     const params = new URLSearchParams()
     Object.entries(query).forEach(([key, value]) => {

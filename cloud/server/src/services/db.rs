@@ -31,7 +31,9 @@ pub async fn initialize(client: &Client) -> anyhow::Result<()> {
         "\n",
         include_str!("../../migrations/014_site_url.sql"),
         "\n",
-        include_str!("../../migrations/015_report_visibility.sql")
+        include_str!("../../migrations/015_report_visibility.sql"),
+        "\n",
+        include_str!("../../migrations/016_report_ranking_override.sql")
     );
     client.batch_execute(sql).await?;
     super::report_legacy::migrate(client).await?;

@@ -68,6 +68,14 @@ pub(crate) struct ReportVisibilityUpdate {
     pub(crate) public_reports: bool,
 }
 
+#[derive(Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub(crate) enum ReportRankingVisibility {
+    Inherit,
+    Public,
+    Private,
+}
+
 #[derive(Serialize)]
 pub(crate) struct ClientKeyInfo {
     pub(crate) id: i64,

@@ -69,9 +69,10 @@ pub(crate) async fn dashboard(
         .map_err(AppError::internal)?
         .get(0);
     let list_sql = format!(
-        "SELECT r.id,r.owner_id,u.email,r.slug,r.api_domain,r.model,r.prompt_name,r.metadata,r.created_at
+        "SELECT r.id,r.owner_id,u.email,r.slug,r.api_domain,r.model,r.prompt_name,r.metadata,r.created_at,
+            r.ranking_public, COALESCE(r.ranking_public, u.public_reports)
          FROM reports r JOIN users u ON u.id=r.owner_id WHERE {REPORT_FILTER}
-         ORDER BY {sort} LIMIT $10 OFFSET $11",
+         ORDER BY {sort}, r.id DESC LIMIT $10 OFFSET $11",
     );
     let mut params = filters.to_vec();
     params.extend([&limit as &(dyn ToSql + Sync), &offset]);
@@ -94,7 +95,9 @@ pub(crate) async fn dashboard(
                 "ttft_ms": metric_number(&metadata, "ttft_ms"),
                 "total_tokens": metric_number(&metadata, "total_tokens"),
                 "tokens_per_second": metric_number(&metadata, "tokens_per_second"),
-                "created_at": row.get::<_, DateTime<Utc>>(8)
+                "created_at": row.get::<_, DateTime<Utc>>(8),
+                "ranking_public": row.get::<_, Option<bool>>(9),
+                "ranking_enabled": row.get::<_, bool>(10),
             })
         })
         .collect();

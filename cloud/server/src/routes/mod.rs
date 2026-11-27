@@ -85,6 +85,10 @@ fn report_routes() -> Router<AppState> {
         .route("/{id}", delete(reports::delete))
         .route("/{id}/details", get(reports::details))
         .route(
+            "/{id}/ranking-visibility",
+            put(reports::update_ranking_visibility),
+        )
+        .route(
             "/{id}/comments",
             get(reports::public_comments).post(reports::add_comment),
         )

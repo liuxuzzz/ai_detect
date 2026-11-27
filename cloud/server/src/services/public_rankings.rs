@@ -11,7 +11,8 @@ use chrono::{DateTime, Utc};
 use serde_json::{json, Value};
 
 const REPORT_FILTER: &str = "r.deleted_at IS NULL
-    AND EXISTS (SELECT 1 FROM users owner WHERE owner.id=r.owner_id AND NOT owner.disabled AND owner.public_reports)
+    AND EXISTS (SELECT 1 FROM users owner WHERE owner.id=r.owner_id AND NOT owner.disabled
+        AND COALESCE(r.ranking_public, owner.public_reports))
     AND COALESCE(r.metadata->>'status', 'success') = 'success'
     AND ($1 = 'latest' OR r.created_at >= date_trunc(NULLIF($1, 'latest'), now(), 'Asia/Shanghai'))
     AND ($2 = '' OR strpos(lower(concat_ws(' ', r.api_domain, r.model, r.prompt_name)), lower($2)) > 0)
@@ -52,7 +53,7 @@ pub(crate) async fn list(state: &AppState, mut query: PublicQuery) -> ServiceRes
         .and_then(|value| value.as_u64())
         .unwrap_or(0);
     let date = (Utc::now() + chrono::Duration::hours(8)).date_naive();
-    let cache_key = format!("aijiance:public:v4:{version}:{date}:{}", json!(query));
+    let cache_key = format!("aijiance:public:v5:{version}:{date}:{}", json!(query));
     if let Some(value) = cache_get(state, &cache_key).await {
         return Ok(value);
     }

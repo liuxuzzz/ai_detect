@@ -18,6 +18,7 @@ const reasoningLabels = { default: '默认（default）', minimal: '极低（min
 const live = computed(() => task.value?.live || {})
 const metrics = computed(() => live.value.metrics || {})
 const diagnostics = computed(() => live.value.diagnostics || {})
+const headerText = (headers) => (headers || []).map(([name, value]) => `${name}: ${value}`).join('\n')
 const number = (value, suffix = '', digits = 0) => value == null ? '未上报' : `${Number(value).toLocaleString('en-US', { maximumFractionDigits: digits })}${suffix}`
 const seconds = (value) => value == null ? '—' : `${(value / 1000).toFixed(2)} s`
 const metricItems = computed(() => [
@@ -48,6 +49,7 @@ watch(() => [props.taskId, props.token], ([id, token], previous, onCleanup) => {
   let retry
   onCleanup(() => { controller.abort(); clearTimeout(retry) })
   task.value = null
+  tab.value = 'output'
   async function connect() {
     let retryable = true
     reconnecting.value = false
@@ -55,6 +57,7 @@ watch(() => [props.taskId, props.token], ([id, token], previous, onCleanup) => {
       await streamTask(token, id, controller.signal, (snapshot) => {
         const oldStatus = task.value?.status
         task.value = snapshot
+        if (snapshot.status === 'failed' && oldStatus !== 'failed') tab.value = 'diagnostics'
         connected.value = true
         error.value = ''
         if (oldStatus && oldStatus !== snapshot.status) emit('changed')
@@ -85,7 +88,7 @@ watch(() => [live.value.output, live.value.reasoning, tab.value], async () => {
         <div><strong>{{ task.model }}</strong><span class="cell-note">{{ task.channel_name || '渠道已删除' }} · {{ task.prompt_name }} · {{ reasoningLabels[task.reasoning_effort] || task.reasoning_effort }}</span></div>
         <span class="status-dot" :class="task.status">{{ statuses[task.status] || task.status }}<small v-if="connected"> · 实时连接</small></span>
       </div>
-      <p class="muted monitor-phase">{{ task.error || live.phase || '等待执行' }} · {{ task.started_at ? formatDate(task.started_at) : `计划 ${formatDate(task.scheduled_for)}` }}</p>
+      <p :class="task.status === 'failed' ? 'monitor-error' : 'muted monitor-phase'">{{ task.error || live.phase || '等待执行' }} · {{ task.started_at ? formatDate(task.started_at) : `计划 ${formatDate(task.scheduled_for)}` }}</p>
       <div class="detail-metrics"><div v-for="[label, value] in metricItems" :key="label"><span>{{ label }}</span><strong>{{ value }}</strong></div></div>
       <LiveThroughputChart :samples="live.samples || []" />
       <div class="panel-toolbar monitor-tabs">
@@ -99,9 +102,25 @@ watch(() => [live.value.output, live.value.reasoning, tab.value], async () => {
       <template v-if="tab === 'diagnostics'">
         <dl class="request-diagnostics">
           <dt>请求</dt><dd>{{ diagnostics.method || 'POST' }} {{ diagnostics.endpoint || '等待连接' }}</dd>
-          <dt>响应</dt><dd>{{ diagnostics.status || '等待响应' }} · {{ diagnostics.content_type || '—' }}</dd>
+          <dt>响应</dt><dd>{{ diagnostics.status || (task.status === 'failed' ? '未收到上游响应' : '等待响应') }} · {{ diagnostics.content_type || '—' }}</dd>
           <dt>接收数据</dt><dd>{{ number(diagnostics.received_bytes, ' bytes') }} · {{ number(diagnostics.chunks, ' 个数据块') }}</dd>
         </dl>
+        <details v-if="diagnostics.request" :open="task.status === 'failed'">
+          <summary>原始 Request</summary>
+          <pre class="live-output">{{ diagnostics.method }} {{ diagnostics.endpoint }}
+{{ headerText(diagnostics.request.headers) }}
+
+{{ diagnostics.request.body }}</pre>
+        </details>
+        <details v-if="diagnostics.response" :open="task.status === 'failed'">
+          <summary>原始 Response</summary>
+          <p v-if="diagnostics.response.incomplete" class="muted">以下为任务结束前已收到的数据。</p>
+          <pre class="live-output">HTTP {{ diagnostics.status }}
+{{ headerText(diagnostics.response.headers) }}
+
+{{ diagnostics.response.body || '响应正文为空' }}</pre>
+        </details>
+        <p v-if="task.status === 'failed' && !diagnostics.request" class="muted">此次执行没有保存原始请求记录。</p>
         <details><summary>最近 40 条流式事件</summary><pre class="live-output">{{ JSON.stringify(live.events || [], null, 2) }}</pre></details>
       </template>
       <template v-else>

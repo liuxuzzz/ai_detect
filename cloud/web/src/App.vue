@@ -50,6 +50,7 @@ const channels = ref([])
 const tasks = ref([])
 const retryingTasks = reactive(new Set())
 const deletingReports = reactive(new Set())
+const savingReportRanking = reactive(new Set())
 const deletingTasks = reactive(new Set())
 const taskFormVisible = ref(false)
 const monitoredTask = ref(null)
@@ -67,6 +68,7 @@ const publicSelection = computed(() => Object.fromEntries(publicFacets.map(({ ke
 const hasPublicFilter = computed(() => Boolean(publicSearch.value || publicFacets.some(({ selected }) => selected)))
 const adminCurrent = computed(() => adminData.value[adminSection.value])
 const adminPageCount = computed(() => Math.max(1, Math.ceil(adminCurrent.value.total / adminCurrent.value.limit)))
+const reportPageCount = computed(() => Math.max(1, Math.ceil(dashboard.value.total / dashboard.value.limit)))
 
 function providerInitial(item) { return (item?.name || item?.api_domain || '未').slice(0, 1).toUpperCase() }
 function clearPublicFilters() { publicSearch.value = ''; searchTerm.value = ''; publicFacets.forEach((facet) => { facet.selected = '' }) }
@@ -153,11 +155,27 @@ async function loadWorkspace() {
       channels.value = await api.channels(token.value)
       return
     }
-    const [nextDashboard, nextChannels, nextTasks] = await Promise.all([api.dashboard(token.value, { page: 0, limit: 50, sort: 'created' }), api.channels(token.value), api.tasks(token.value)])
+    const [nextDashboard, nextChannels, nextTasks] = await Promise.all([loadReportPage(dashboard.value.page), api.channels(token.value), api.tasks(token.value)])
     dashboard.value = nextDashboard
     channels.value = nextChannels
     tasks.value = nextTasks
   } catch (error) { ElMessage.error(error.message) } finally { workspaceLoading.value = false }
+}
+async function loadReportPage(page) {
+  const query = { page, limit: dashboard.value.limit, sort: 'created' }
+  const result = await api.dashboard(token.value, query)
+  const lastPage = Math.max(0, Math.ceil(result.total / result.limit) - 1)
+  return page > lastPage ? api.dashboard(token.value, { ...query, page: lastPage }) : result
+}
+async function showReportPage(page) {
+  workspaceLoading.value = true
+  try {
+    dashboard.value = await loadReportPage(page)
+  } catch (error) {
+    ElMessage.error(error.message)
+  } finally {
+    workspaceLoading.value = false
+  }
 }
 watch([view, workspaceSection, testSection, token], ([screen, section, tab, session], previous, onCleanup) => {
   if (!session || screen !== 'workspace' || section !== 'tests') return
@@ -219,6 +237,27 @@ async function removeMyReport(report) {
     ElMessage.error(error.message)
   } finally {
     deletingReports.delete(report.id)
+  }
+}
+function reportRanking(report) {
+  if (report.ranking_public == null) return 'inherit'
+  return report.ranking_public ? 'public' : 'private'
+}
+async function saveReportRanking(report, event) {
+  const select = event.target
+  const next = select.value
+  select.value = reportRanking(report)
+  savingReportRanking.add(report.id)
+  try {
+    const result = await api.updateReportRanking(token.value, report.id, next)
+    dashboard.value.items = dashboard.value.items.map((item) => (
+      item.id === report.id ? { ...item, ...result } : item
+    ))
+    await refreshPublic()
+  } catch (error) {
+    ElMessage.error(error.message)
+  } finally {
+    savingReportRanking.delete(report.id)
   }
 }
 async function removeTask(task) {
@@ -400,13 +439,22 @@ onMounted(async () => { await Promise.all([loadPublic(), restoreSession()]) })
         <div v-loading="workspaceLoading" class="table-frame" :aria-busy="workspaceLoading">
           <template v-if="testSection === 'results'">
             <table class="data-table work-table" aria-label="测试结果">
-              <thead><tr><th>模型 / 厂商</th><th>状态</th><th>首 token</th><th>总 token</th><th>平均吞吐</th><th>总耗时</th><th>时间</th><th>操作</th></tr></thead>
+              <thead><tr><th>模型 / 厂商</th><th>状态</th><th>首 token</th><th>总 token</th><th>平均吞吐</th><th>总耗时</th><th>时间</th><th>公开排行</th><th>操作</th></tr></thead>
               <tbody><tr v-for="item in dashboard.items" :key="item.id">
                 <th scope="row"><button type="button" class="text-button" @click="openReport(item)">{{ item.model }}</button><span class="cell-note">{{ item.api_domain }}</span></th>
                 <td data-label="状态"><span class="status-dot" :class="item.status">{{ statusLabels[item.status] || item.status }}</span></td>
                 <td data-label="首 token">{{ formatDuration(item.ttft_ms) }}</td><td data-label="总 token">{{ formatMetric(item.total_tokens, '', 0) }}</td>
                 <td data-label="平均吞吐">{{ formatThroughput(item.tokens_per_second) }}</td><td data-label="总耗时">{{ formatDuration(item.duration_ms) }}</td>
                 <td data-label="时间" class="muted">{{ formatDate(item.created_at) }}</td>
+                <td data-label="公开排行">
+                  <select class="report-ranking-select" :aria-label="`${item.model} 报告 #${item.id} 的公开排行设置`"
+                    :value="reportRanking(item)" :disabled="savingReportRanking.has(item.id) || deletingReports.has(item.id)"
+                    @change="saveReportRanking(item, $event)">
+                    <option value="inherit">跟随个人设置<template v-if="item.ranking_public == null">（{{ item.ranking_enabled ? '公开' : '不公开' }}）</template></option>
+                    <option value="public">公开</option>
+                    <option value="private">不公开</option>
+                  </select>
+                </td>
                 <td data-label="操作" class="row-actions">
                   <a class="small-button" :href="`/r/${item.slug}`" target="_blank" rel="noopener">查看报告 ↗</a>
                   <button class="small-button danger" type="button" :disabled="deletingReports.has(item.id)" @click="removeMyReport(item)">删除</button>
@@ -414,6 +462,11 @@ onMounted(async () => { await Promise.all([loadPublic(), restoreSession()]) })
               </tr></tbody>
             </table>
             <div v-if="!dashboard.items.length" class="empty-cell">{{ workspaceLoading ? '正在加载…' : '暂无测试结果' }}</div>
+            <div v-if="reportPageCount > 1" class="toolbar-actions pagination report-pagination" aria-label="测试结果分页">
+              <button class="button outline icon-button" :disabled="workspaceLoading || dashboard.page <= 0" type="button" aria-label="上一页" @click="showReportPage(dashboard.page - 1)"><ArrowLeft aria-hidden="true" /></button>
+              <span>{{ dashboard.page + 1 }} / {{ reportPageCount }}</span>
+              <button class="button outline icon-button" :disabled="workspaceLoading || dashboard.page + 1 >= reportPageCount" type="button" aria-label="下一页" @click="showReportPage(dashboard.page + 1)"><ArrowRight aria-hidden="true" /></button>
+            </div>
           </template>
           <template v-else>
             <table class="data-table work-table" aria-label="任务队列">
@@ -425,7 +478,7 @@ onMounted(async () => { await Promise.all([loadPublic(), restoreSession()]) })
                 <td data-label="计划时间">{{ formatDate(task.scheduled_for) }}</td>
                 <td data-label="结果" class="wrap-cell"><a v-if="task.report_slug" class="small-button" :href="`/r/${task.report_slug}`" target="_blank" rel="noopener">查看报告 ↗</a><template v-else>{{ task.error || '—' }}</template></td>
                 <td data-label="操作" class="row-actions">
-                  <button class="small-button" type="button" @click="monitoredTask = task.id">实时详情</button>
+                  <button class="small-button" type="button" @click="monitoredTask = task.id">{{ task.status === 'failed' ? '失败详情' : '实时详情' }}</button>
                   <button v-if="task.status === 'failed'" class="small-button" type="button"
                     :disabled="retryingTasks.has(task.id) || deletingTasks.has(task.id)" :aria-busy="retryingTasks.has(task.id)" @click="retryTask(task)">
                     {{ retryingTasks.has(task.id) ? '正在重试…' : '立即重试' }}
@@ -471,7 +524,7 @@ onMounted(async () => { await Promise.all([loadPublic(), restoreSession()]) })
         </div>
       </section>
 
-      <ProfileCenter v-else-if="workspaceSection === 'profile' && loggedIn" :key="user.id" :token="token" :user="user" :format-date="formatDate" @session-updated="updateSession" />
+      <ProfileCenter v-else-if="workspaceSection === 'profile' && loggedIn" :key="user.id" :token="token" :user="user" :format-date="formatDate" @session-updated="updateSession" @sharing-updated="refreshPublic" />
 
       <section v-else-if="workspaceSection === 'admin' && isAdmin" aria-label="管理中心">
         <div class="panel-toolbar">

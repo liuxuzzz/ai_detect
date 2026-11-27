@@ -576,6 +576,7 @@ async fn report_workflow_and_route_compatibility() {
     check_task_retry(&app, &settings.database_url, admin, upstream_id).await;
     task_management::check(&app, &settings, admin).await;
     check_own_deletion(&app, &settings.database_url, admin, id).await;
+    check_report_ranking(&app, admin).await;
 
     for path in [
         "/api/dashboard",
@@ -628,6 +629,111 @@ async fn member_session(app: &Router, purpose: &str) -> (String, String) {
         email,
         format!("Bearer {}", login["token"].as_str().unwrap()),
     )
+}
+
+async fn check_report_ranking(app: &Router, admin: (&str, &str)) {
+    let (_, bearer) = member_session(app, "ranking").await;
+    let member = Some(("authorization", bearer.as_str()));
+    let key = request(app, Method::POST, "/api/auth/client-keys", member, None).await;
+    let key = json_body(key, StatusCode::OK).await;
+    let model = format!("ranking-fixture-{}", rand::random::<u64>());
+    let rankings = format!("/api/public/rankings?model={model}");
+    let mut reports = Vec::new();
+    for _ in 0..2 {
+        let uploaded = request(
+            app,
+            Method::POST,
+            "/api/reports/upload",
+            Some(("x-client-key", key["key"].as_str().unwrap())),
+            Some(json!({
+                "data": {"version": 1, "output": "ranking fixture"},
+                "api_domain": "example.test",
+                "model": model,
+            })),
+        )
+        .await;
+        reports.push(json_body(uploaded, StatusCode::OK).await);
+    }
+    let id = reports[0]["id"].as_i64().unwrap();
+    let visibility = format!("/api/reports/{id}/ranking-visibility");
+    let forbidden = request(
+        app,
+        Method::PUT,
+        &visibility,
+        Some(admin),
+        Some(json!("public")),
+    )
+    .await;
+    assert_eq!(forbidden.status(), StatusCode::NOT_FOUND);
+
+    for (global, override_value, expected_override, listed) in [
+        (false, "inherit", None, false),
+        (false, "public", Some(true), true),
+        (false, "inherit", None, false),
+        (true, "private", Some(false), false),
+        (true, "inherit", None, true),
+    ] {
+        let updated = request(
+            app,
+            Method::PUT,
+            "/api/auth/report-visibility",
+            member,
+            Some(json!({"public_reports": global})),
+        )
+        .await;
+        assert_eq!(
+            json_body(updated, StatusCode::OK).await["public_reports"],
+            global
+        );
+        let updated = request(
+            app,
+            Method::PUT,
+            &visibility,
+            member,
+            Some(json!(override_value)),
+        )
+        .await;
+        let updated = json_body(updated, StatusCode::OK).await;
+        assert_eq!(updated["ranking_public"], json!(expected_override));
+        assert_eq!(updated["ranking_enabled"], listed);
+
+        let response = request(app, Method::GET, &rankings, None, None).await;
+        let response = json_body(response, StatusCode::OK).await;
+        let items = response["items"].as_array().unwrap();
+        for (report, expected) in [(&reports[0], listed), (&reports[1], global)] {
+            assert_eq!(
+                items.iter().any(|item| item["id"] == report["id"]),
+                expected
+            );
+        }
+
+        let dashboard = request(app, Method::GET, "/api/dashboard", member, None).await;
+        let dashboard = json_body(dashboard, StatusCode::OK).await;
+        let report = dashboard["items"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|item| item["id"] == id)
+            .unwrap();
+        assert_eq!(report["ranking_public"], json!(expected_override));
+        assert_eq!(report["ranking_enabled"], listed);
+    }
+
+    let report_url = format!(
+        "/api/public/reports/{}",
+        reports[0]["slug"].as_str().unwrap()
+    );
+    let updated = request(
+        app,
+        Method::PUT,
+        &visibility,
+        member,
+        Some(json!("private")),
+    )
+    .await;
+    assert_eq!(updated.status(), StatusCode::OK);
+    let shared = request(app, Method::GET, &report_url, None, None).await;
+    assert_eq!(shared.status(), StatusCode::OK);
 }
 
 async fn check_own_deletion(

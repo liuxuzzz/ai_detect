@@ -9,7 +9,7 @@ const props = defineProps({
   user: { type: Object, required: true },
   formatDate: { type: Function, required: true },
 })
-const emit = defineEmits(['session-updated'])
+const emit = defineEmits(['session-updated', 'sharing-updated'])
 const section = ref('client-keys')
 const saving = ref(false)
 const password = reactive({ current: '', next: '', confirm: '' })
@@ -35,6 +35,7 @@ async function saveSharing() {
     const result = await api.updateReportVisibility(props.token, { public_reports: sharing.value })
     sharing.value = result.public_reports
     ElMessage.success(result.public_reports ? '已开启公开排行分享' : '已关闭公开排行分享')
+    emit('sharing-updated')
   } catch (error) {
     sharing.value = !sharing.value
     ElMessage.error(error.message)
@@ -81,8 +82,8 @@ async function changePassword() {
     <ClientKeys v-if="section === 'client-keys'" :token="token" :format-date="formatDate" />
     <section v-else-if="section === 'sharing'" class="password-panel" aria-labelledby="sharing-heading" :aria-busy="sharingLoading || sharingSaving">
       <h2 id="sharing-heading" class="panel-heading">公开排行分享</h2>
-      <p class="muted">开启后，自己上传的成功测试会出现在公开排行。关闭后，自己的测试不会出现在公开排行。</p>
-      <label class="sharing-setting"><input v-model="sharing" type="checkbox" :disabled="sharingLoading || sharingSaving" @change="saveSharing" />允许我的测试显示在公开排行</label>
+      <p class="muted">成功的测试报告默认使用此设置。可在「我的测试」中单独调整每份报告。持有报告链接的人仍可访问。</p>
+      <label class="sharing-setting"><input v-model="sharing" type="checkbox" :disabled="sharingLoading || sharingSaving" @change="saveSharing" />默认在公开排行中展示我的测试报告</label>
     </section>
     <section v-else class="password-panel" aria-labelledby="password-heading">
       <h2 id="password-heading" class="panel-heading">修改密码</h2>

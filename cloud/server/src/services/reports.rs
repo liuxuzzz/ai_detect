@@ -1,7 +1,8 @@
 use crate::{
     error::{err, AppError, ErrorKind, ServiceResult},
     models::{
-        CommentInput, PageQuery, RatingInput, RatingResult, ReportDetails, ShareInput, Upload,
+        CommentInput, PageQuery, RatingInput, RatingResult, ReportDetails, ReportRankingVisibility,
+        ShareInput, Upload,
     },
     services::{auth::random_token, cache::clear},
     state::AppState,
@@ -156,6 +157,31 @@ pub(crate) async fn delete(state: &AppState, owner: i64, id: i64) -> ServiceResu
     }
     clear(state).await;
     Ok(())
+}
+
+pub(crate) async fn update_ranking_visibility(
+    state: &AppState,
+    owner: i64,
+    id: i64,
+    visibility: ReportRankingVisibility,
+) -> ServiceResult<Value> {
+    let ranking_public = match visibility {
+        ReportRankingVisibility::Inherit => None,
+        ReportRankingVisibility::Public => Some(true),
+        ReportRankingVisibility::Private => Some(false),
+    };
+    let row = state.connection().await?.query_opt(
+        "UPDATE reports r SET ranking_public=$3 FROM users u
+         WHERE r.id=$1 AND r.owner_id=$2 AND r.deleted_at IS NULL AND u.id=r.owner_id AND NOT u.disabled
+         RETURNING r.ranking_public, COALESCE(r.ranking_public, u.public_reports)",
+        &[&id, &owner, &ranking_public],
+    ).await.map_err(AppError::internal)?
+        .ok_or_else(|| err(ErrorKind::NotFound, "报告不存在"))?;
+    clear(state).await;
+    Ok(json!({
+        "ranking_public": row.get::<_, Option<bool>>(0),
+        "ranking_enabled": row.get::<_, bool>(1),
+    }))
 }
 
 pub(crate) async fn insert(

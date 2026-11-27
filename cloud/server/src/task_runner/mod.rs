@@ -66,8 +66,7 @@ async fn drive_execution(
     execution: impl std::future::Future<Output = anyhow::Result<Upload>>,
     mut progress: watch::Receiver<Value>,
 ) -> anyhow::Result<()> {
-    let execution = tokio::time::timeout(REQUEST_TIMEOUT, execution);
-    tokio::pin!(execution);
+    let mut execution = Box::pin(tokio::time::timeout(REQUEST_TIMEOUT, execution));
     let mut check = tokio::time::interval(Duration::from_millis(250));
     loop {
         tokio::select! {
@@ -79,7 +78,9 @@ async fn drive_execution(
                     return Ok(());
                 }
             }
-            result = &mut execution => {
+            result = execution.as_mut() => {
+                // A timed-out request publishes the bytes received so far when dropped.
+                drop(execution);
                 let latest = progress.borrow().clone();
                 update_live(state, task, Some(latest)).await?;
                 let result = result.unwrap_or_else(|_| Err(anyhow!("测试超时：60 分钟")));

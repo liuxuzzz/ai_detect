@@ -62,7 +62,7 @@ pub async fn dashboard_version(state: &AppState) -> u64 {
 
 pub fn dashboard_key(claims: &Claims, query: &DashboardQuery, version: u64) -> String {
     format!(
-        "aijiance:dashboard:personal:{version}:{}:{}:{}:{}:{}:{}:{}:{}:{}:{}:{}:{}",
+        "aijiance:dashboard:personal:v2:{version}:{}:{}:{}:{}:{}:{}:{}:{}:{}:{}:{}:{}",
         claims.sub,
         query.period,
         query.api_domain,

@@ -1,7 +1,17 @@
 use super::*;
+use axum::http::StatusCode;
 use axum::{routing::post, Json, Router};
 
 async fn response_fixture(body: String, streaming: bool) -> (anyhow::Result<Upload>, Value) {
+    upstream_fixture(body, streaming, StatusCode::OK, 7).await
+}
+
+async fn upstream_fixture(
+    body: String,
+    streaming: bool,
+    status: StatusCode,
+    chunk_size: usize,
+) -> (anyhow::Result<Upload>, Value) {
     let app = Router::new().route(
         "/v1/responses",
         post(
@@ -21,18 +31,23 @@ async fn response_fixture(body: String, streaming: bool) -> (anyhow::Result<Uplo
                 // Split within JSON fields and UTF-8 code points, as real network chunks do.
                 let chunks = body
                     .into_bytes()
-                    .chunks(7)
+                    .chunks(chunk_size)
                     .map(|chunk| Ok::<_, std::convert::Infallible>(chunk.to_vec()))
                     .collect::<Vec<_>>();
                 (
-                    [(
-                        "content-type",
-                        if streaming {
-                            "text/event-stream"
-                        } else {
-                            "application/json"
-                        },
-                    )],
+                    status,
+                    [
+                        (
+                            "content-type",
+                            if streaming {
+                                "text/event-stream"
+                            } else {
+                                "application/json"
+                            },
+                        ),
+                        ("x-upstream-request-id", "fixture-id"),
+                        ("set-cookie", "session=private-cookie"),
+                    ],
                     axum::body::Body::from_stream(futures_util::stream::iter(chunks)),
                 )
             },
@@ -135,6 +150,54 @@ async fn reads_a_json_responses_result() {
 }
 
 #[tokio::test]
+async fn saves_failed_http_exchange_with_credentials_redacted() {
+    let body = r#"{"error":"账号不可用 fixture-key"}"#.to_owned();
+    let (result, live) = upstream_fixture(body, false, StatusCode::BAD_GATEWAY, 7).await;
+    assert_eq!(
+        result.err().unwrap().to_string(),
+        "上游模型接口返回 HTTP 502"
+    );
+    let diagnostics = &live["diagnostics"];
+    assert_eq!(diagnostics["status"], 502);
+    let request: Value =
+        serde_json::from_str(diagnostics["request"]["body"].as_str().unwrap()).unwrap();
+    assert_eq!(request["input"][0]["content"], "原样提示词\n");
+    assert!(diagnostics["request"]["headers"]
+        .as_array()
+        .unwrap()
+        .contains(&json!(["authorization", "[已隐藏]"])));
+    let response = &diagnostics["response"];
+    assert_eq!(response["incomplete"], false);
+    assert_eq!(response["body"], r#"{"error":"账号不可用 [已隐藏]"}"#);
+    assert!(response["headers"]
+        .as_array()
+        .unwrap()
+        .contains(&json!(["x-upstream-request-id", "fixture-id"])));
+    assert!(response["headers"]
+        .as_array()
+        .unwrap()
+        .contains(&json!(["set-cookie", "[已隐藏]"])));
+}
+
+#[tokio::test]
+async fn accepts_sse_with_over_two_mib_of_wire_data() {
+    let event =
+        json!({"type":"response.output_text.delta", "delta":"x", "padding":".".repeat(8 * 1024)});
+    let mut body = format!("data: {event}\n\n").repeat(300);
+    body.push_str(&format!(
+        "data: {}\n\n",
+        json!({
+            "type": "response.completed",
+            "response": {"status": "completed", "output": []},
+        })
+    ));
+    assert!(body.len() > 2 * 1024 * 1024);
+    let (result, live) = upstream_fixture(body, true, StatusCode::OK, 8192).await;
+    assert_eq!(result.unwrap().data.output, "x".repeat(300));
+    assert!(live["diagnostics"].get("request").is_none());
+}
+
+#[tokio::test]
 async fn rejects_failed_incomplete_and_truncated_responses() {
     for terminal in [
         json!({"type":"response.failed", "response":{"status":"failed", "error":{"code":"server_error"}}}),
@@ -142,11 +205,17 @@ async fn rejects_failed_incomplete_and_truncated_responses() {
         json!({"type":"error", "message":"stream failed"}),
     ] {
         let body = format!("data: {{\"type\":\"response.output_text.delta\",\"delta\":\"partial\"}}\n\ndata: {terminal}\n\n");
-        assert!(response_fixture(body, true).await.0.is_err());
+        let (result, live) = response_fixture(body.clone(), true).await;
+        assert!(result.is_err());
+        let raw = live["diagnostics"]["response"]["body"].as_str().unwrap();
+        assert!(raw.contains(&terminal.to_string()));
     }
     let body =
         "data: {\"type\":\"response.output_text.delta\",\"delta\":\"partial\"}\n\ndata: [DONE]\n\n";
-    assert!(response_fixture(body.into(), true).await.0.is_err());
+    let (result, live) = response_fixture(body.into(), true).await;
+    assert!(result.is_err());
+    assert_eq!(live["diagnostics"]["response"]["body"], body);
+    assert_eq!(live["diagnostics"]["response"]["incomplete"], false);
 }
 
 #[test]
